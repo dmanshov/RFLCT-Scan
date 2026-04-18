@@ -8,52 +8,43 @@ const SCRAPER_KEY = process.env.SCRAPER_API_KEY ?? '2d98f5e2bc8104a5ef6f55f04bf0
 
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get('url');
-  const strategy = req.nextUrl.searchParams.get('strategy') ?? 'json';
   if (!url) return NextResponse.json({ error: 'Missing url param' }, { status: 400 });
 
-  const idMatch = url.match(/\/(\d{6,9})(?:[?#]|$)/);
-  const id = idMatch?.[1] ?? null;
+  const cleanUrl = url.split('?')[0];
 
-  if (strategy === 'json' && id) {
-    try {
-      const apiUrl = `https://api.immoweb.be/classified/${id}?language=nl&country=BE`;
-      const res = await axios.get('https://api.scraperapi.com/', {
-        params: { api_key: SCRAPER_KEY, url: apiUrl, country_code: 'be' },
-        headers: { Accept: 'application/json' },
-        timeout: 60_000,
-        responseType: 'text',
-      });
-      const text = String(res.data ?? '');
-      return NextResponse.json({
-        strategy: 'json-api',
-        bytes: text.length,
-        first500: text.slice(0, 500),
-        looksLikeJson: text.trimStart().startsWith('{'),
-      });
-    } catch (e) {
-      return NextResponse.json({ strategy: 'json-api', error: e instanceof Error ? e.message : String(e) });
-    }
-  }
+  const res = await axios.get('https://api.scraperapi.com/', {
+    params: { api_key: SCRAPER_KEY, url: cleanUrl, country_code: 'be', render: 'false' },
+    timeout: 90_000,
+    responseType: 'text',
+  });
 
-  if (strategy === 'render') {
-    try {
-      const cleanUrl = url.split('?')[0];
-      const res = await axios.get('https://api.scraperapi.com/', {
-        params: { api_key: SCRAPER_KEY, url: cleanUrl, country_code: 'be', render: 'true' },
-        timeout: 90_000,
-        responseType: 'text',
-      });
-      const html = String(res.data ?? '');
-      return NextResponse.json({
-        strategy: 'js-render',
-        bytes: html.length,
-        first500: html.slice(0, 500),
-        hasPropertyData: html.includes('"property"') && html.includes('"transaction"'),
-      });
-    } catch (e) {
-      return NextResponse.json({ strategy: 'js-render', error: e instanceof Error ? e.message : String(e) });
-    }
-  }
+  const html = String(res.data ?? '');
 
-  return NextResponse.json({ error: 'Use ?strategy=json or ?strategy=render' }, { status: 400 });
+  // Extract meta tags
+  const getMeta = (attr: string, val: string) => {
+    const m = html.match(new RegExp(`<meta[^>]+${attr}=["']${val}["'][^>]+content=["']([^"']+)["']`, 'i'))
+      ?? html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+${attr}=["']${val}["']`, 'i'));
+    return m?.[1] ?? null;
+  };
+
+  // Extract JSON-LD blocks
+  const jsonLdMatches = Array.from(html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi));
+  const jsonLd = jsonLdMatches.map(m => { try { return JSON.parse(m[1]); } catch { return m[1].slice(0, 200); } });
+
+  // Extract dataLayer pushes
+  const dataLayerMatches = Array.from(html.matchAll(/dataLayer\.push\((\{[\s\S]*?\})\)/g)).slice(0, 5);
+  const dataLayers = dataLayerMatches.map(m => { try { return JSON.parse(m[1]); } catch { return m[1].slice(0, 200); } });
+
+  return NextResponse.json({
+    bytes: html.length,
+    meta: {
+      title: getMeta('property', 'og:title') ?? getMeta('name', 'title'),
+      description: getMeta('property', 'og:description') ?? getMeta('name', 'description'),
+      image: getMeta('property', 'og:image'),
+      price: getMeta('property', 'og:price:amount') ?? getMeta('property', 'product:price:amount'),
+    },
+    jsonLd,
+    dataLayers,
+    first300: html.slice(0, 300),
+  });
 }
