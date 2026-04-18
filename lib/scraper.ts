@@ -9,103 +9,54 @@ function extractListingId(url: string): string {
   return match[1];
 }
 
-function extractNextData(html: string): Record<string, unknown> | null {
-  // Regex is more reliable than a DOM parser for large SSR pages
-  const match = html.match(/<script[^>]+id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/);
-  if (!match) {
-    console.warn('[scraper] __NEXT_DATA__ not found. Page snippet:', html.slice(0, 500));
-    return null;
-  }
-  try {
-    const nd = JSON.parse(match[1]);
-    const props = nd?.props?.pageProps ?? {};
-    const listing = props?.classified ?? props?.listing ?? props?.classifiedProperty ?? null;
-    return listing && typeof listing === 'object' ? listing : null;
-  } catch (e) {
-    console.warn('[scraper] Failed to parse __NEXT_DATA__:', e);
-    return null;
-  }
+function getMeta(html: string, attr: string, val: string): string | null {
+  const m = html.match(new RegExp(`<meta[^>]+${attr}=["']${val}["'][^>]+content=["']([^"']+)["']`, 'i'))
+    ?? html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+${attr}=["']${val}["']`, 'i'));
+  return m ? decodeURIComponent(m[1].replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))) : null;
 }
 
-async function fetchListing(id: string, originalUrl: string): Promise<Record<string, unknown>> {
-  const cleanUrl = originalUrl.split('?')[0];
+function extractFromHtml(html: string, url: string, id: string): ImmowebListing {
+  const title = getMeta(html, 'property', 'og:title') ?? getMeta(html, 'name', 'title') ?? '';
+  const description = getMeta(html, 'property', 'og:description') ?? getMeta(html, 'name', 'description') ?? '';
+  const image = getMeta(html, 'property', 'og:image');
 
-  const res = await axios.get('https://api.scraperapi.com/', {
-    params: {
-      api_key: SCRAPER_KEY,
-      url: cleanUrl,
-      country_code: 'be',
-      render: 'false',
-    },
-    timeout: 90_000,
-    responseType: 'text',
-  });
+  // Price from og tags or title pattern like "€ 349.000"
+  const priceMatch = (title + ' ' + description).match(/[€$]\s*([\d.,]+)/);
+  const price = priceMatch ? parseFloat(priceMatch[1].replace(/\./g, '').replace(',', '.')) : null;
 
-  const html = String(res.data ?? '');
-  const listing = extractNextData(html);
-  if (listing) return listing;
+  // Try JSON-LD for richer data
+  let jsonLd: Record<string, unknown> = {};
+  const ldMatch = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/i);
+  if (ldMatch) { try { jsonLd = JSON.parse(ldMatch[1]); } catch { /* ignore */ } }
 
-  throw new Error(`Kon geen advertentiedata vinden op de pagina (${html.length} bytes ontvangen). Controleer de URL.`);
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseListingData(raw: any, url: string, id: string): ImmowebListing {
-  const property = raw?.property ?? {};
-  const transaction = raw?.transaction ?? {};
-  const energy = property?.energy ?? raw?.energy ?? {};
-  const location = property?.location ?? raw?.location ?? {};
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const firstCustomer: any = (raw?.customers ?? [])[0] ?? {};
-
-  const descObj = raw?.description ?? {};
-  const description: string =
-    typeof descObj === 'string' ? descObj : descObj?.nl ?? descObj?.fr ?? descObj?.en ?? '';
-
-  const title: string = raw?.cluster?.title ?? raw?.propertyName ?? raw?.title ?? '';
-
-  const photos: string[] = [];
-  const floorPlans: string[] = [];
-  for (const pic of (raw?.media?.pictures ?? []) as unknown[]) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const p = pic as any;
-    const picUrl: string = p.largeUrl ?? p.url ?? p.mediumUrl ?? '';
-    if (!picUrl) continue;
-    (p.type === 'FLOOR_PLAN' || p.category === 'FLOOR_PLAN' ? floorPlans : photos).push(picUrl);
-  }
-
-  const epcScore: number | null = energy.primaryEnergyConsumptionPerSqm ?? energy.primaryEnergyConsumption ?? null;
-  const epcLabel: string | null = energy.epcScore ?? energy.energyClass ?? null;
-
-  let daysOnline: number | null = null;
-  const pubStr: string | null = raw?.publication?.publicationDate ?? raw?.publicationDate ?? null;
-  if (pubStr) daysOnline = Math.floor((Date.now() - new Date(pubStr).getTime()) / 86_400_000);
+  const photos: string[] = image ? [image] : [];
 
   const dl = description.toLowerCase();
   return {
-    id: String(raw?.id ?? id),
+    id,
     url,
     title,
     description,
-    price: transaction?.sale?.price ?? raw?.price?.mainValue ?? null,
-    propertyType: property?.type ?? raw?.type ?? 'UNKNOWN',
-    city: location?.locality ?? location?.municipality ?? '',
-    postalCode: String(location?.postalCode ?? ''),
+    price: (jsonLd?.offers as Record<string, unknown>)?.price as number ?? price,
+    propertyType: 'UNKNOWN',
+    city: (jsonLd?.address as Record<string, unknown>)?.addressLocality as string ?? '',
+    postalCode: (jsonLd?.address as Record<string, unknown>)?.postalCode as string ?? '',
     photos,
-    floorPlans,
-    epcScore,
-    epcLabel,
-    area: property?.netHabitableSurface ?? property?.livingArea ?? null,
-    bedrooms: property?.bedroomCount ?? null,
-    bathrooms: property?.bathroomCount ?? null,
-    constructionYear: property?.building?.constructionYear ?? null,
-    agencyName: firstCustomer?.name ?? null,
-    agencyPhone: firstCustomer?.phone ?? null,
-    agencyEmail: firstCustomer?.email ?? null,
-    stats: { daysOnline, views: null, saves: null },
+    floorPlans: [],
+    epcScore: null,
+    epcLabel: null,
+    area: null,
+    bedrooms: null,
+    bathrooms: null,
+    constructionYear: null,
+    agencyName: null,
+    agencyPhone: null,
+    agencyEmail: null,
+    stats: { daysOnline: null, views: null, saves: null },
     compliance: {
       hasRenovationObligation: /renovatieplicht|renovatieverplichting|r[eé]novation obligatoire/.test(dl),
       hasAsbestosInfo: /asbest|asbestattest|amiante/.test(dl),
-      hasEpcLabel: !!epcLabel,
+      hasEpcLabel: /epc|energielabel/.test(dl),
       hasFloodRisk: /overstromingsgevoeligheid|watertoets|risque d.inondation|p-score|g-score/.test(dl),
     },
   };
@@ -115,7 +66,20 @@ export async function scrapeImmowebListing(url: string): Promise<ImmowebListing>
   if (!url.includes('immoweb.be')) {
     throw new Error('Enkel Immoweb-advertenties worden ondersteund (url moet immoweb.be bevatten).');
   }
+
   const id = extractListingId(url);
-  const raw = await fetchListing(id, url);
-  return parseListingData(raw, url, id);
+  const cleanUrl = url.split('?')[0];
+
+  const res = await axios.get('https://api.scraperapi.com/', {
+    params: { api_key: SCRAPER_KEY, url: cleanUrl, country_code: 'be', render: 'false' },
+    timeout: 90_000,
+    responseType: 'text',
+  });
+
+  const html = String(res.data ?? '');
+  if (html.length < 1000) {
+    throw new Error(`Pagina kon niet worden opgehaald (${html.length} bytes). Controleer de ScraperAPI-credits.`);
+  }
+
+  return extractFromHtml(html, url, id);
 }
