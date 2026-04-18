@@ -44,8 +44,8 @@ export async function analyzePhotos(photoUrls: string[]): Promise<PhotoAnalysisR
     };
   }
 
-  // Limit to 8 photos to stay within token budget
-  const urls = photoUrls.slice(0, 8);
+  // Limit to 5 photos — keeps latency within Vercel's 60s hobby timeout
+  const urls = photoUrls.slice(0, 5);
 
   const imageContent: Anthropic.ImageBlockParam[] = urls.map((url) => ({
     type: 'image',

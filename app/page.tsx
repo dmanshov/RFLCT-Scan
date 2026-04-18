@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -16,17 +16,37 @@ const INDICATORS = [
   { icon: '📊', label: 'Statistieken', desc: 'Views, bewaringen & publicatieduur' },
 ];
 
+const LOADING_STEPS = [
+  'Advertentie ophalen van Immoweb…',
+  "Foto's downloaden en analyseren…",
+  'Advertentietekst beoordelen met AI…',
+  'Volgorde van beelden controleren…',
+  'Scorekaart samenstellen…',
+  'Rapport bijna klaar…',
+];
+
 export default function HomePage() {
   const router = useRouter();
   const [url, setUrl] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState('');
+
+  // Cycle through loading step messages while waiting
+  useEffect(() => {
+    if (!loading) return;
+    const interval = setInterval(() => {
+      setLoadingStep((s) => (s + 1) % LOADING_STEPS.length);
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [loading]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setLoadingStep(0);
     setError('');
     try {
       const res = await fetch('/api/scan', {
@@ -36,6 +56,12 @@ export default function HomePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Onbekende fout');
+
+      // Cache full scan result in sessionStorage so the results page
+      // can display it immediately without a separate API call.
+      if (data.scan) {
+        sessionStorage.setItem(`rflct-scan-${data.scanId}`, JSON.stringify(data.scan));
+      }
       router.push(`/scan/${data.scanId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Er is een fout opgetreden. Probeer opnieuw.');
@@ -52,9 +78,7 @@ export default function HomePage() {
         <div
           aria-hidden
           className="absolute inset-0 opacity-5"
-          style={{
-            backgroundImage: `radial-gradient(circle at 70% 40%, #C9A050 0%, transparent 60%)`,
-          }}
+          style={{ backgroundImage: 'radial-gradient(circle at 70% 40%, #C9A050 0%, transparent 60%)' }}
         />
         <div className="relative max-w-6xl mx-auto px-6 py-24 lg:py-32 grid lg:grid-cols-2 gap-12 items-center">
           <div className="space-y-6">
@@ -77,78 +101,73 @@ export default function HomePage() {
 
           {/* Scan form */}
           <div className="bg-white rounded-xl p-8 shadow-2xl">
-            <h2 className="font-bold text-gray-900 text-lg mb-1">Start uw gratis scan</h2>
-            <p className="text-gray-500 text-sm mb-6">Uw rapport arriveert binnen enkele minuten in uw mailbox.</p>
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="label" htmlFor="url">Immoweb-advertentie URL *</label>
-                <input
-                  id="url"
-                  type="url"
-                  required
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://www.immoweb.be/nl/te-koop/..."
-                  className="input"
-                />
-              </div>
-
-              <div>
-                <label className="label" htmlFor="email">E-mailadres *</label>
-                <input
-                  id="email"
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="uwmail@voorbeeld.be"
-                  className="input"
-                />
-              </div>
-
-              <div>
-                <label className="label" htmlFor="phone">
-                  Telefoonnummer <span className="text-gray-400 normal-case font-normal">(optioneel)</span>
-                </label>
-                <input
-                  id="phone"
-                  type="tel"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+32 4XX XX XX XX"
-                  className="input"
-                />
-              </div>
-
-              {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded">
-                  {error}
+            {loading ? (
+              <div className="py-8 text-center space-y-6">
+                <svg className="animate-spin h-12 w-12 text-brand-gold mx-auto" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+                <div>
+                  <p className="font-bold text-gray-900 text-lg mb-1">Uw advertentie wordt geanalyseerd</p>
+                  <p className="text-brand-gold text-sm font-medium transition-all">{LOADING_STEPS[loadingStep]}</p>
                 </div>
-              )}
+                <p className="text-gray-400 text-xs">Dit duurt doorgaans 30–90 seconden.<br />Even geduld…</p>
+              </div>
+            ) : (
+              <>
+                <h2 className="font-bold text-gray-900 text-lg mb-1">Start uw gratis scan</h2>
+                <p className="text-gray-500 text-sm mb-6">Uw rapport arriveert binnen enkele minuten in uw mailbox.</p>
 
-              <button type="submit" disabled={loading} className="btn-primary w-full text-base py-3.5">
-                {loading ? (
-                  <span className="flex items-center gap-2 justify-center">
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                    </svg>
-                    Scan starten…
-                  </span>
-                ) : (
-                  'Scan starten →'
-                )}
-              </button>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <label className="label" htmlFor="url">Immoweb-advertentie URL *</label>
+                    <input
+                      id="url" type="url" required value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      placeholder="https://www.immoweb.be/nl/te-koop/..."
+                      className="input"
+                    />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="email">E-mailadres *</label>
+                    <input
+                      id="email" type="email" required value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="uwmail@voorbeeld.be"
+                      className="input"
+                    />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="phone">
+                      Telefoonnummer <span className="text-gray-400 normal-case font-normal">(optioneel)</span>
+                    </label>
+                    <input
+                      id="phone" type="tel" value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="+32 4XX XX XX XX"
+                      className="input"
+                    />
+                  </div>
 
-              <p className="text-xs text-gray-400 text-center">
-                Door te starten gaat u akkoord met onze{' '}
-                <a href="https://www.rflct.be/privacy" className="underline hover:text-gray-600" target="_blank" rel="noopener noreferrer">
-                  privacyverklaring
-                </a>
-                .
-              </p>
-            </form>
+                  {error && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded">
+                      {error}
+                    </div>
+                  )}
+
+                  <button type="submit" className="btn-primary w-full text-base py-3.5">
+                    Scan starten →
+                  </button>
+
+                  <p className="text-xs text-gray-400 text-center">
+                    Door te starten gaat u akkoord met onze{' '}
+                    <a href="https://www.rflct.be/privacy" className="underline hover:text-gray-600" target="_blank" rel="noopener noreferrer">
+                      privacyverklaring
+                    </a>.
+                  </p>
+                </form>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -184,13 +203,11 @@ export default function HomePage() {
         <div className="grid sm:grid-cols-3 gap-8">
           {[
             { step: '01', title: 'URL invoeren', desc: 'Plak de link van uw Immoweb-advertentie in het formulier en vul uw e-mailadres in.' },
-            { step: '02', title: 'AI analyseert', desc: 'Onze AI evalueert foto\'s, tekst, grondplannen en wettelijke vermeldingen — volledig automatisch.' },
+            { step: '02', title: 'AI analyseert', desc: "Onze AI evalueert foto's, tekst, grondplannen en wettelijke vermeldingen — volledig automatisch." },
             { step: '03', title: 'Rapport ontvangen', desc: 'U ontvangt een gedetailleerd PDF-rapport met scorekaart, werkpunten en gepersonaliseerd advies.' },
           ].map((item) => (
             <div key={item.step} className="relative pl-16">
-              <span className="absolute left-0 top-0 text-5xl font-black text-gray-100 leading-none select-none">
-                {item.step}
-              </span>
+              <span className="absolute left-0 top-0 text-5xl font-black text-gray-100 leading-none select-none">{item.step}</span>
               <h3 className="font-bold text-gray-900 mb-2 relative">{item.title}</h3>
               <p className="text-gray-500 text-sm leading-relaxed relative">{item.desc}</p>
             </div>
