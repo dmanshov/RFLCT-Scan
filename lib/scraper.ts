@@ -41,8 +41,8 @@ async function fetchViaHtml(url: string): Promise<unknown> {
 }
 
 async function fetchViaScraperApi(id: string, originalUrl: string): Promise<unknown> {
-  const key = process.env.SCRAPER_API_KEY;
-  if (!key) return null; // not configured — skip
+  // SCRAPER_API_KEY env var takes precedence; fallback for demo deployment
+  const key = process.env.SCRAPER_API_KEY ?? '2d98f5e2bc8104a5ef6f55f04bf06d92';
 
   // Try the Immoweb internal API through ScraperAPI
   const targetUrl = `https://api.immoweb.be/classified/${id}?language=nl&country=BE`;
