@@ -34,7 +34,11 @@ function coerceJson(data: unknown): Record<string, unknown> | null {
 function extractNextData(html: string): Record<string, unknown> | null {
   const $ = load(html);
   const raw = $('script#__NEXT_DATA__').html() ?? '';
-  if (!raw) return null;
+  if (!raw) {
+    // Log a snippet to help diagnose what page is actually being served
+    console.warn('[scraper] __NEXT_DATA__ not found. First 800 chars:', html.slice(0, 800));
+    return null;
+  }
   try {
     const nd = JSON.parse(raw);
     const props = nd?.props?.pageProps ?? {};
@@ -43,7 +47,7 @@ function extractNextData(html: string): Record<string, unknown> | null {
   } catch { return null; }
 }
 
-// ── Strategy 1: Immoweb internal REST API ────────────────────────────────────
+// ── Strategy 1: Immoweb internal REST API (direct) ───────────────────────────
 
 async function tryImmowebApi(id: string): Promise<Record<string, unknown> | null> {
   try {
@@ -56,43 +60,91 @@ async function tryImmowebApi(id: string): Promise<Record<string, unknown> | null
     const obj = coerceJson(res.data);
     if (obj?.id || obj?.property) return obj;
   } catch (e) {
-    console.warn('[scraper] Immoweb API:', e instanceof Error ? e.message : e);
+    console.warn('[scraper] Immoweb API direct:', e instanceof Error ? e.message : e);
   }
   return null;
 }
 
-// ── Strategy 2: ScraperAPI residential proxy ─────────────────────────────────
-// One call only (HTML page). No country_code = global proxy pool = much faster.
-// SSE streaming keeps the Vercel function alive, so 90s timeout is safe.
+// ── Strategy 2: ScraperAPI → Immoweb JSON API ────────────────────────────────
+// Proxy the JSON API endpoint through ScraperAPI to get a BE residential IP.
+// API endpoints typically don't have cookie consent gates.
 
-async function tryScraperApi(id: string, originalUrl: string): Promise<Record<string, unknown> | null> {
-  // Strip tracking params — cleaner URL, less chance of redirect loops
+async function tryScraperApiJson(id: string): Promise<Record<string, unknown> | null> {
+  try {
+    const apiUrl = `https://api.immoweb.be/classified/${id}?language=nl&country=BE`;
+    const res = await axios.get('https://api.scraperapi.com/', {
+      params: {
+        api_key: SCRAPER_KEY,
+        url: apiUrl,
+        country_code: 'be',
+      },
+      headers: { Accept: 'application/json' },
+      timeout: 60_000,
+      responseType: 'text',
+    });
+    const obj = coerceJson(res.data);
+    if (obj?.id || obj?.property) {
+      console.info('[scraper] ScraperAPI → JSON API ✓');
+      return obj;
+    }
+    console.warn('[scraper] ScraperAPI JSON API: response not usable:', String(res.data).slice(0, 200));
+  } catch (e) {
+    console.warn('[scraper] ScraperAPI JSON API:', e instanceof Error ? e.message : e);
+  }
+  return null;
+}
+
+// ── Strategy 3: ScraperAPI → HTML page (no JS render) ───────────────────────
+
+async function tryScraperApiHtml(id: string, originalUrl: string): Promise<Record<string, unknown> | null> {
   const cleanUrl = originalUrl.split('?')[0];
+  try {
+    const res = await axios.get('https://api.scraperapi.com/', {
+      params: {
+        api_key: SCRAPER_KEY,
+        url: cleanUrl,
+        country_code: 'be',
+        render: 'false',
+      },
+      timeout: 90_000,
+      responseType: 'text',
+    });
+    const html = String(res.data ?? '');
+    const obj = extractNextData(html);
+    if (obj) { console.info('[scraper] ScraperAPI → HTML ✓'); return obj; }
+    const json = coerceJson(html);
+    if (json && (json.id || json.property)) return json;
+    console.warn('[scraper] ScraperAPI HTML: no listing data, bytes:', html.length);
+  } catch (e) {
+    console.warn('[scraper] ScraperAPI HTML:', e instanceof Error ? e.message : e);
+  }
+  return null;
+}
 
+// ── Strategy 4: ScraperAPI → HTML + JS rendering ────────────────────────────
+// Costs 5 credits/req but executes JS, which bypasses cookie consent gates.
+
+async function tryScraperApiJsRender(id: string, originalUrl: string): Promise<Record<string, unknown> | null> {
+  const cleanUrl = originalUrl.split('?')[0];
   const res = await axios.get('https://api.scraperapi.com/', {
     params: {
       api_key: SCRAPER_KEY,
       url: cleanUrl,
-      render: 'false',       // no JS rendering needed — Immoweb is SSR
+      country_code: 'be',
+      render: 'true',
+      wait: 3000,          // wait 3s for JS to settle after consent gate
     },
-    timeout: 90_000,
+    timeout: 120_000,
     responseType: 'text',
   });
 
   const html = String(res.data ?? '');
-
-  // Primary: __NEXT_DATA__ from the HTML page
   const obj = extractNextData(html);
-  if (obj) {
-    console.info('[scraper] ScraperAPI → HTML ✓');
-    return obj;
-  }
-
-  // Fallback: maybe the response itself is JSON (redirected to API)
+  if (obj) { console.info('[scraper] ScraperAPI → HTML+JS ✓'); return obj; }
   const json = coerceJson(html);
   if (json && (json.id || json.property)) return json;
 
-  throw new Error(`ScraperAPI leverde geen herkenbare Immoweb-data (${html.length} bytes ontvangen).`);
+  throw new Error(`ScraperAPI (JS render) leverde geen herkenbare Immoweb-data (${html.length} bytes ontvangen).`);
 }
 
 // ── Parse unified listing object ─────────────────────────────────────────────
@@ -170,18 +222,28 @@ export async function scrapeImmowebListing(url: string): Promise<ImmowebListing>
   const id = extractListingId(url);
   const errors: string[] = [];
 
-  // Strategy 1: Immoweb internal API — fast, no proxy cost
+  // Strategy 1: Direct Immoweb JSON API — fast, no proxy cost
   const direct = await tryImmowebApi(id);
   if (direct) return parseListingData(direct, url, id);
   errors.push('Immoweb API: geblokkeerd');
 
-  // Strategy 2: ScraperAPI residential proxy
+  // Strategy 2: ScraperAPI → Immoweb JSON API (BE residential IP, no consent gate)
+  const scraperJson = await tryScraperApiJson(id);
+  if (scraperJson) return parseListingData(scraperJson, url, id);
+  errors.push('ScraperAPI JSON API: geen data');
+
+  // Strategy 3: ScraperAPI → HTML page without JS render
+  const scraperHtml = await tryScraperApiHtml(id, url);
+  if (scraperHtml) return parseListingData(scraperHtml, url, id);
+  errors.push('ScraperAPI HTML: geen data');
+
+  // Strategy 4: ScraperAPI → HTML + JS rendering (bypasses consent gates, costs 5 credits)
   try {
-    const scraped = await tryScraperApi(id, url);
+    const scraped = await tryScraperApiJsRender(id, url);
     if (scraped) return parseListingData(scraped, url, id);
-    errors.push('ScraperAPI: geen data');
+    errors.push('ScraperAPI JS render: geen data');
   } catch (e) {
-    errors.push(`ScraperAPI: ${e instanceof Error ? e.message : String(e)}`);
+    errors.push(`ScraperAPI JS render: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   throw new Error(`Kon de advertentie niet ophalen. Fouten: ${errors.join(' | ')}`);
