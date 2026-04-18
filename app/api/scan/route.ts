@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+
+export const maxDuration = 300; // 300s on Pro, 60s on Hobby
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import { saveScan, updateScan } from '@/lib/store';

@@ -2,9 +2,10 @@ import fs from 'fs';
 import path from 'path';
 import type { ScanRecord } from '@/types/scan';
 
+// On Vercel the filesystem is read-only except for /tmp
 const DATA_DIR = process.env.SCAN_DATA_DIR
   ? path.resolve(process.env.SCAN_DATA_DIR)
-  : path.resolve(process.cwd(), 'data', 'scans');
+  : path.join('/tmp', 'rflct-scans');
 
 function ensureDir() {
   if (!fs.existsSync(DATA_DIR)) {
