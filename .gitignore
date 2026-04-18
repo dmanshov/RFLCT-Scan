@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+
+# Env
+.env
+.env.local
+.env.production
+
+# Scan result JSON files (sensitive — use object storage in production)
+data/scans/*.json
+
+# Misc
+.DS_Store
+*.log
+npm-debug.log*
