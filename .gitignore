@@ -17,3 +17,4 @@ data/scans/*.json
 .DS_Store
 *.log
 npm-debug.log*
+tsconfig.tsbuildinfo
