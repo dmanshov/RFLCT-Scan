@@ -9,31 +9,43 @@ function extractListingId(url: string): string {
   return match[1];
 }
 
-async function fetchListing(id: string): Promise<Record<string, unknown>> {
-  const apiUrl = `https://api.immoweb.be/classified/${id}?language=nl&country=BE`;
-
-  // Try direct first (works in local dev), fall back to ScraperAPI on Vercel
-  for (const params of [
-    {},                                          // direct
-    { api_key: SCRAPER_KEY, url: apiUrl, country_code: 'be' },  // via ScraperAPI
-  ]) {
-    try {
-      const isProxy = 'api_key' in params;
-      const res = await axios.get(isProxy ? 'https://api.scraperapi.com/' : apiUrl, {
-        params: isProxy ? params : { language: 'nl', country: 'BE' },
-        headers: { Accept: 'application/json' },
-        timeout: isProxy ? 60_000 : 10_000,
-        responseType: 'text',
-      });
-      const text = typeof res.data === 'string' ? res.data : JSON.stringify(res.data);
-      const obj = JSON.parse(text) as Record<string, unknown>;
-      if (obj?.id || obj?.property) return obj;
-    } catch (e) {
-      console.warn('[scraper] attempt failed:', e instanceof Error ? e.message : e);
-    }
+function extractNextData(html: string): Record<string, unknown> | null {
+  // Regex is more reliable than a DOM parser for large SSR pages
+  const match = html.match(/<script[^>]+id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/);
+  if (!match) {
+    console.warn('[scraper] __NEXT_DATA__ not found. Page snippet:', html.slice(0, 500));
+    return null;
   }
+  try {
+    const nd = JSON.parse(match[1]);
+    const props = nd?.props?.pageProps ?? {};
+    const listing = props?.classified ?? props?.listing ?? props?.classifiedProperty ?? null;
+    return listing && typeof listing === 'object' ? listing : null;
+  } catch (e) {
+    console.warn('[scraper] Failed to parse __NEXT_DATA__:', e);
+    return null;
+  }
+}
 
-  throw new Error('Kon de advertentie niet ophalen. Controleer de URL of probeer opnieuw.');
+async function fetchListing(id: string, originalUrl: string): Promise<Record<string, unknown>> {
+  const cleanUrl = originalUrl.split('?')[0];
+
+  const res = await axios.get('https://api.scraperapi.com/', {
+    params: {
+      api_key: SCRAPER_KEY,
+      url: cleanUrl,
+      country_code: 'be',
+      render: 'false',
+    },
+    timeout: 90_000,
+    responseType: 'text',
+  });
+
+  const html = String(res.data ?? '');
+  const listing = extractNextData(html);
+  if (listing) return listing;
+
+  throw new Error(`Kon geen advertentiedata vinden op de pagina (${html.length} bytes ontvangen). Controleer de URL.`);
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,6 +116,6 @@ export async function scrapeImmowebListing(url: string): Promise<ImmowebListing>
     throw new Error('Enkel Immoweb-advertenties worden ondersteund (url moet immoweb.be bevatten).');
   }
   const id = extractListingId(url);
-  const raw = await fetchListing(id);
+  const raw = await fetchListing(id, url);
   return parseListingData(raw, url, id);
 }
