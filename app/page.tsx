@@ -16,53 +16,74 @@ const INDICATORS = [
   { icon: '📊', label: 'Statistieken', desc: 'Views, bewaringen & publicatieduur' },
 ];
 
-const LOADING_STEPS = [
-  'Advertentie ophalen van Immoweb…',
-  "Foto's downloaden en analyseren…",
-  'Advertentietekst beoordelen met AI…',
-  'Volgorde van beelden controleren…',
-  'Scorekaart samenstellen…',
-  'Rapport bijna klaar…',
-];
-
 export default function HomePage() {
   const router = useRouter();
   const [url, setUrl] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
-  const [loadingStep, setLoadingStep] = useState(0);
+  const [loadingMessage, setLoadingMessage] = useState('Scan wordt voorbereid…');
+  const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState('');
 
-  // Cycle through loading step messages while waiting
+  // Elapsed timer for UX feedback
   useEffect(() => {
-    if (!loading) return;
-    const interval = setInterval(() => {
-      setLoadingStep((s) => (s + 1) % LOADING_STEPS.length);
-    }, 6000);
-    return () => clearInterval(interval);
+    if (!loading) { setElapsed(0); return; }
+    const t = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(t);
   }, [loading]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    setLoadingStep(0);
+    setLoadingMessage('Scan wordt gestart…');
     setError('');
+
     try {
       const res = await fetch('/api/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, email, phone: phone || undefined }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? 'Onbekende fout');
 
-      // Cache full scan result in sessionStorage so the results page
-      // can display it immediately without a separate API call.
-      if (data.scan) {
-        sessionStorage.setItem(`rflct-scan-${data.scanId}`, JSON.stringify(data.scan));
+      // Non-200 before stream starts = validation error
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(data.error ?? 'Onbekende fout bij het starten van de scan.');
       }
-      router.push(`/scan/${data.scanId}`);
+
+      // Read Server-Sent Events stream
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? ''; // keep incomplete last line
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          let event: { type: string; message?: string; scanId?: string; scan?: unknown };
+          try { event = JSON.parse(line.slice(6)); } catch { continue; }
+
+          if (event.type === 'status' && event.message) {
+            setLoadingMessage(event.message);
+          } else if (event.type === 'done' && event.scanId && event.scan) {
+            sessionStorage.setItem(`rflct-scan-${event.scanId}`, JSON.stringify(event.scan));
+            router.push(`/scan/${event.scanId}`);
+            return;
+          } else if (event.type === 'error' && event.message) {
+            throw new Error(event.message);
+          }
+        }
+      }
+
+      // Stream ended without 'done' event
+      throw new Error('Scan werd onderbroken. Probeer opnieuw of contacteer info@rflct.be.');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Er is een fout opgetreden. Probeer opnieuw.');
       setLoading(false);
@@ -99,7 +120,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Scan form */}
+          {/* Form card */}
           <div className="bg-white rounded-xl p-8 shadow-2xl">
             {loading ? (
               <div className="py-8 text-center space-y-6">
@@ -108,10 +129,13 @@ export default function HomePage() {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
                 <div>
-                  <p className="font-bold text-gray-900 text-lg mb-1">Uw advertentie wordt geanalyseerd</p>
-                  <p className="text-brand-gold text-sm font-medium transition-all">{LOADING_STEPS[loadingStep]}</p>
+                  <p className="font-bold text-gray-900 text-lg mb-2">Uw advertentie wordt geanalyseerd</p>
+                  <p className="text-brand-gold text-sm font-medium min-h-[1.25rem]">{loadingMessage}</p>
                 </div>
-                <p className="text-gray-400 text-xs">Dit duurt doorgaans 30–90 seconden.<br />Even geduld…</p>
+                <div className="text-xs text-gray-400 space-y-1">
+                  <p>{elapsed}s verstreken · doorgaans 30–90 seconden</p>
+                  <p>U ontvangt ook een e-mail zodra het rapport klaar is.</p>
+                </div>
               </div>
             ) : (
               <>
@@ -121,32 +145,26 @@ export default function HomePage() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="label" htmlFor="url">Immoweb-advertentie URL *</label>
-                    <input
-                      id="url" type="url" required value={url}
+                    <input id="url" type="url" required value={url}
                       onChange={(e) => setUrl(e.target.value)}
                       placeholder="https://www.immoweb.be/nl/te-koop/..."
-                      className="input"
-                    />
+                      className="input" />
                   </div>
                   <div>
                     <label className="label" htmlFor="email">E-mailadres *</label>
-                    <input
-                      id="email" type="email" required value={email}
+                    <input id="email" type="email" required value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="uwmail@voorbeeld.be"
-                      className="input"
-                    />
+                      className="input" />
                   </div>
                   <div>
                     <label className="label" htmlFor="phone">
                       Telefoonnummer <span className="text-gray-400 normal-case font-normal">(optioneel)</span>
                     </label>
-                    <input
-                      id="phone" type="tel" value={phone}
+                    <input id="phone" type="tel" value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="+32 4XX XX XX XX"
-                      className="input"
-                    />
+                      className="input" />
                   </div>
 
                   {error && (
@@ -158,12 +176,10 @@ export default function HomePage() {
                   <button type="submit" className="btn-primary w-full text-base py-3.5">
                     Scan starten →
                   </button>
-
                   <p className="text-xs text-gray-400 text-center">
                     Door te starten gaat u akkoord met onze{' '}
-                    <a href="https://www.rflct.be/privacy" className="underline hover:text-gray-600" target="_blank" rel="noopener noreferrer">
-                      privacyverklaring
-                    </a>.
+                    <a href="https://www.rflct.be/privacy" className="underline hover:text-gray-600"
+                      target="_blank" rel="noopener noreferrer">privacyverklaring</a>.
                   </p>
                 </form>
               </>
@@ -172,7 +188,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* What we check */}
+      {/* Indicators */}
       <section className="bg-brand-off-white py-20">
         <div className="max-w-6xl mx-auto px-6">
           <div className="text-center mb-12">
@@ -194,7 +210,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* How it works */}
+      {/* Steps */}
       <section className="py-20 max-w-6xl mx-auto px-6">
         <div className="text-center mb-12">
           <p className="text-brand-gold text-xs font-bold uppercase tracking-widest mb-3">Hoe werkt het?</p>

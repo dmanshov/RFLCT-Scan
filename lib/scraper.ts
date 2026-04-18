@@ -202,25 +202,19 @@ export async function scrapeImmowebListing(url: string): Promise<ImmowebListing>
   const id = extractListingId(url);
   const errors: string[] = [];
 
-  // Try direct strategies first (fast, no credits consumed)
+  // Strategy 1: Immoweb internal API — quick win if not blocked
   const direct1 = await tryImmowebApi(id);
   if (direct1) return parseListingData(direct1, url, id);
   errors.push('Immoweb API: geblokkeerd');
 
-  const direct2 = await tryHtml(url);
-  if (direct2) return parseListingData(direct2, url, id);
-  errors.push('HTML: geblokkeerd');
-
-  // ScraperAPI with residential proxy
+  // Strategy 2: ScraperAPI residential proxy (primary path on Vercel)
   try {
     const scraped = await tryScraperApi(id, url);
     if (scraped) return parseListingData(scraped, url, id);
-    errors.push('ScraperAPI: geen data');
+    errors.push('ScraperAPI: geen herkenbare data');
   } catch (e) {
     errors.push(`ScraperAPI: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  throw new Error(
-    `Kon de advertentie niet ophalen. Fouten: ${errors.join(' | ')}`,
-  );
+  throw new Error(`Kon de advertentie niet ophalen. Fouten: ${errors.join(' | ')}`);
 }
