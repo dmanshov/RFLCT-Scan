@@ -71,7 +71,7 @@ export async function scrapeImmowebListing(url: string): Promise<ImmowebListing>
   const cleanUrl = url.split('?')[0];
 
   const res = await axios.get('https://api.scraperapi.com/', {
-    params: { api_key: SCRAPER_KEY, url: cleanUrl, country_code: 'be', render: 'false' },
+    params: { api_key: SCRAPER_KEY, url: cleanUrl, render: 'false' },
     timeout: 90_000,
     responseType: 'text',
   });

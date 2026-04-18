@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const res = await axios.get('https://api.scraperapi.com/', {
-      params: { api_key: SCRAPER_KEY, url: url.split('?')[0], country_code: 'be', render: 'false' },
+      params: { api_key: SCRAPER_KEY, url: url.split('?')[0], render: 'false' },
       timeout: 90_000,
       responseType: 'text',
     });
