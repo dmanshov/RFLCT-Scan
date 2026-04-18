@@ -61,70 +61,38 @@ async function tryImmowebApi(id: string): Promise<Record<string, unknown> | null
   return null;
 }
 
-// ── Strategy 2: HTML __NEXT_DATA__ ───────────────────────────────────────────
+// ── Strategy 2: ScraperAPI residential proxy ─────────────────────────────────
+// One call only (HTML page). No country_code = global proxy pool = much faster.
+// SSE streaming keeps the Vercel function alive, so 90s timeout is safe.
 
-async function tryHtml(url: string): Promise<Record<string, unknown> | null> {
-  try {
-    const res = await axios.get(url, {
-      headers: { ...BROWSER_HEADERS, Accept: 'text/html,*/*' },
-      timeout: 12_000,
-      maxRedirects: 5,
-      responseType: 'text',
-    });
-    return extractNextData(String(res.data));
-  } catch (e) {
-    console.warn('[scraper] HTML fetch:', e instanceof Error ? e.message : e);
-  }
-  return null;
-}
+async function tryScraperApi(id: string, originalUrl: string): Promise<Record<string, unknown> | null> {
+  // Strip tracking params — cleaner URL, less chance of redirect loops
+  const cleanUrl = originalUrl.split('?')[0];
 
-// ── Strategy 3: ScraperAPI proxy ─────────────────────────────────────────────
-
-async function scraperGet(targetUrl: string): Promise<string> {
   const res = await axios.get('https://api.scraperapi.com/', {
     params: {
       api_key: SCRAPER_KEY,
-      url: targetUrl,
-      country_code: 'be',
-      keep_headers: 'true',
+      url: cleanUrl,
+      render: 'false',       // no JS rendering needed — Immoweb is SSR
     },
-    headers: { Accept: '*/*' },
-    timeout: 50_000,
+    timeout: 90_000,
     responseType: 'text',
   });
-  return String(res.data ?? '');
-}
 
-async function tryScraperApi(id: string, originalUrl: string): Promise<Record<string, unknown> | null> {
-  // 3a — Immoweb REST API through proxy
-  try {
-    const apiUrl = `https://api.immoweb.be/classified/${id}?language=nl&country=BE`;
-    const text = await scraperGet(apiUrl);
-    const obj = coerceJson(text);
-    if (obj && (obj.id || obj.property)) {
-      console.info('[scraper] ScraperAPI → JSON API ✓');
-      return obj;
-    }
-  } catch (e) {
-    console.warn('[scraper] ScraperAPI JSON API:', e instanceof Error ? e.message : e);
+  const html = String(res.data ?? '');
+
+  // Primary: __NEXT_DATA__ from the HTML page
+  const obj = extractNextData(html);
+  if (obj) {
+    console.info('[scraper] ScraperAPI → HTML ✓');
+    return obj;
   }
 
-  // 3b — Immoweb HTML page through proxy
-  try {
-    const html = await scraperGet(originalUrl);
-    const obj = extractNextData(html);
-    if (obj) {
-      console.info('[scraper] ScraperAPI → HTML ✓');
-      return obj;
-    }
-    // maybe the whole response IS the JSON
-    const fallback = coerceJson(html);
-    if (fallback && (fallback.id || fallback.property)) return fallback;
-    throw new Error('Geen herkenbare data in ScraperAPI-respons.');
-  } catch (e) {
-    console.warn('[scraper] ScraperAPI HTML:', e instanceof Error ? e.message : e);
-    throw e;
-  }
+  // Fallback: maybe the response itself is JSON (redirected to API)
+  const json = coerceJson(html);
+  if (json && (json.id || json.property)) return json;
+
+  throw new Error(`ScraperAPI leverde geen herkenbare Immoweb-data (${html.length} bytes ontvangen).`);
 }
 
 // ── Parse unified listing object ─────────────────────────────────────────────
@@ -202,16 +170,16 @@ export async function scrapeImmowebListing(url: string): Promise<ImmowebListing>
   const id = extractListingId(url);
   const errors: string[] = [];
 
-  // Strategy 1: Immoweb internal API — quick win if not blocked
-  const direct1 = await tryImmowebApi(id);
-  if (direct1) return parseListingData(direct1, url, id);
+  // Strategy 1: Immoweb internal API — fast, no proxy cost
+  const direct = await tryImmowebApi(id);
+  if (direct) return parseListingData(direct, url, id);
   errors.push('Immoweb API: geblokkeerd');
 
-  // Strategy 2: ScraperAPI residential proxy (primary path on Vercel)
+  // Strategy 2: ScraperAPI residential proxy
   try {
     const scraped = await tryScraperApi(id, url);
     if (scraped) return parseListingData(scraped, url, id);
-    errors.push('ScraperAPI: geen herkenbare data');
+    errors.push('ScraperAPI: geen data');
   } catch (e) {
     errors.push(`ScraperAPI: ${e instanceof Error ? e.message : String(e)}`);
   }
