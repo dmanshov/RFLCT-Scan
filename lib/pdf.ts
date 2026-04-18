@@ -7,9 +7,7 @@ import {
   StyleSheet,
   Font,
   renderToBuffer,
-  Svg,
-  Circle,
-  G,
+  type DocumentProps,
 } from '@react-pdf/renderer';
 import type { ScanRecord } from '@/types/scan';
 
@@ -58,25 +56,12 @@ function verdictColor(verdict: string) {
 }
 
 function ScoreGaugePdf({ score }: { score: number }) {
-  const radius = 45;
-  const circumference = 2 * Math.PI * radius;
-  const offset = circumference - (score / 100) * circumference;
   const color = score >= 70 ? GREEN : score >= 50 ? ORANGE : RED;
-  return (
-    React.createElement(Svg, { width: 120, height: 120, viewBox: "0 0 120 120" },
-      React.createElement(Circle, { cx: 60, cy: 60, r: radius, stroke: '#E5E7EB', strokeWidth: 10, fill: 'none' }),
-      React.createElement(Circle, {
-        cx: 60, cy: 60, r: radius,
-        stroke: color, strokeWidth: 10, fill: 'none',
-        strokeDasharray: `${circumference}`,
-        strokeDashoffset: `${offset}`,
-        strokeLinecap: 'round',
-        transform: 'rotate(-90, 60, 60)',
-      }),
-      React.createElement(G, null,
-        React.createElement(Text, { x: 60, y: 66, textAnchor: 'middle', fontSize: 22, fontFamily: 'Helvetica-Bold', fill: '#111827' } as unknown as Record<string, unknown>, `${score}`)
-      )
-    )
+  return React.createElement(
+    View,
+    { style: { alignItems: 'center', justifyContent: 'center', width: 120, height: 120, borderRadius: 60, backgroundColor: NAVY } },
+    React.createElement(Text, { style: { color, fontSize: 36, fontFamily: 'Helvetica-Bold', lineHeight: 1 } }, `${score}`),
+    React.createElement(Text, { style: { color: '#9CA3AF', fontSize: 11, marginTop: 2 } }, '/ 100'),
   );
 }
 
@@ -220,6 +205,6 @@ function RflctDocument({ scan }: { scan: ScanRecord }) {
 }
 
 export async function generateScanPdf(scan: ScanRecord): Promise<Buffer> {
-  const doc = React.createElement(RflctDocument, { scan });
+  const doc = React.createElement(RflctDocument, { scan }) as React.ReactElement<DocumentProps>;
   return await renderToBuffer(doc);
 }

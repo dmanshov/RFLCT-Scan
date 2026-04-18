@@ -72,7 +72,7 @@ export default function RecommendationShop({ recommendation, scanId, totalScore 
       const res = await fetch('/api/quote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scanId, selectedServices: [...selected], message }),
+        body: JSON.stringify({ scanId, selectedServices: Array.from(selected), message }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Onbekende fout');
@@ -211,7 +211,7 @@ export default function RecommendationShop({ recommendation, scanId, totalScore 
             <div>
               <p className="text-xs text-gray-500 mb-1">Geselecteerd</p>
               <p className="text-sm font-semibold text-gray-800">
-                {[...selected].map((id) => SERVICES.find((s) => s.id === id)?.name).filter(Boolean).join(' · ')}
+                {Array.from(selected).map((id) => SERVICES.find((s) => s.id === id)?.name).filter(Boolean).join(' · ')}
               </p>
             </div>
             <button type="submit" disabled={submitting} className="btn-primary">
