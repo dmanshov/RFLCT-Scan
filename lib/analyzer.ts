@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
+import axios from 'axios';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -44,13 +45,32 @@ export async function analyzePhotos(photoUrls: string[]): Promise<PhotoAnalysisR
     };
   }
 
-  // Limit to 5 photos — keeps latency within Vercel's 60s hobby timeout
+  // Limit to 5 photos — keeps latency and token cost reasonable
   const urls = photoUrls.slice(0, 5);
 
-  const imageContent: Anthropic.ImageBlockParam[] = urls.map((url) => ({
-    type: 'image',
-    source: { type: 'url', url },
-  }));
+  // Download images server-side and send as base64 — Immoweb CDN blocks Anthropic's IPs
+  type Base64Block = { type: 'image'; source: { type: 'base64'; media_type: 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif'; data: string } };
+  const downloaded = await Promise.all(
+    urls.map(async (url): Promise<Base64Block | null> => {
+      try {
+        const res = await axios.get<ArrayBuffer>(url, {
+          responseType: 'arraybuffer',
+          timeout: 15_000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36',
+            Referer: 'https://www.immoweb.be/',
+          },
+        });
+        const b64 = Buffer.from(res.data as ArrayBuffer).toString('base64');
+        const ct = (res.headers['content-type'] as string | undefined) ?? 'image/jpeg';
+        const mediaType = ct.split(';')[0].trim() as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+        return { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } };
+      } catch {
+        return null;
+      }
+    })
+  );
+  const imageContent: Anthropic.ImageBlockParam[] = downloaded.filter((b): b is Base64Block => b !== null);
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
