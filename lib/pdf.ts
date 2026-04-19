@@ -11,7 +11,6 @@ import {
 } from '@react-pdf/renderer';
 import type { ScanRecord } from '@/types/scan';
 
-// Register a basic font (built-in Helvetica works without registration)
 Font.register({ family: 'Helvetica', src: 'Helvetica' });
 
 const NAVY = '#0F1B2D';
@@ -35,10 +34,14 @@ const styles = StyleSheet.create({
   scoreLabel: { color: '#9CA3AF', fontSize: 9, marginTop: 4 },
   recommendationBadge: { backgroundColor: GOLD, borderRadius: 4, paddingHorizontal: 10, paddingVertical: 4, alignSelf: 'flex-start' },
   recommendationText: { color: NAVY, fontSize: 10, fontFamily: 'Helvetica-Bold' },
-  indicatorRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, backgroundColor: LIGHT, borderRadius: 6, padding: '10 12' },
+  indicatorRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, backgroundColor: LIGHT, borderRadius: 6, padding: '8 12' },
   indicatorName: { flex: 3, fontSize: 10, fontFamily: 'Helvetica-Bold' },
   indicatorBar: { flex: 5, height: 6, backgroundColor: '#E5E7EB', borderRadius: 3, marginHorizontal: 12 },
   indicatorScore: { flex: 1, fontSize: 10, textAlign: 'right' },
+  indicatorDetail: { marginHorizontal: 40, marginBottom: 10, paddingHorizontal: 12 },
+  feedbackItem: { flexDirection: 'row', gap: 5, marginBottom: 3 },
+  feedbackBullet: { fontSize: 9, width: 10, fontFamily: 'Helvetica-Bold' },
+  feedbackText: { fontSize: 9, flex: 1, lineHeight: 1.4 },
   workpointItem: { flexDirection: 'row', marginBottom: 6, gap: 6 },
   bullet: { fontSize: 10, color: GOLD, fontFamily: 'Helvetica-Bold' },
   workpointText: { fontSize: 10, flex: 1, lineHeight: 1.5 },
@@ -69,7 +72,7 @@ function RflctDocument({ scan }: { scan: ScanRecord }) {
   const listing = scan.listing!;
   const breakdown = scan.scores!;
   const total = scan.totalScore ?? 0;
-  const rec = scan.recommendation ?? 'PERFECT';
+  const rec = scan.recommendation ?? 'ONLINE';
   const workPoints = scan.workPoints ?? [];
 
   const recLabels: Record<string, string> = {
@@ -80,10 +83,11 @@ function RflctDocument({ scan }: { scan: ScanRecord }) {
     PERFECT: 'Kwalitatieve scan — verdere optimalisatie mogelijk',
   };
 
+  const indicators = Object.values(breakdown);
+
   return React.createElement(Document, { title: `RFLCT Advertentie-scan — ${listing.title || listing.url}` },
-    // PAGE 1 — Score overview
+    // PAGE 1 — Score overview + indicator summary
     React.createElement(Page, { size: 'A4', style: styles.page },
-      // Header
       React.createElement(View, { style: styles.header },
         React.createElement(View, null,
           React.createElement(Text, { style: styles.headerTitle }, 'RFLCT'),
@@ -130,10 +134,10 @@ function RflctDocument({ scan }: { scan: ScanRecord }) {
         ),
       ),
 
-      // Indicators
+      // Indicator bars
       React.createElement(View, { style: styles.section },
         React.createElement(Text, { style: styles.sectionTitle }, 'Scorekaart per indicator'),
-        ...Object.values(breakdown).map((ind) =>
+        ...indicators.map((ind) =>
           React.createElement(View, { key: ind.key, style: styles.indicatorRow },
             React.createElement(Text, { style: styles.indicatorName }, ind.label),
             React.createElement(View, { style: styles.indicatorBar },
@@ -144,22 +148,71 @@ function RflctDocument({ scan }: { scan: ScanRecord }) {
         ),
       ),
 
-      // Footer
       React.createElement(View, { style: styles.footer, fixed: true },
         React.createElement(Text, { style: styles.footerText }, 'RFLCT · www.rflct.be · info@rflct.be'),
         React.createElement(Text, { style: styles.footerText }, `Vertrouwelijk · ${scan.email}`),
       ),
     ),
 
-    // PAGE 2 — Work points & recommendation
+    // PAGE 2 — Detailed per-indicator feedback
     React.createElement(Page, { size: 'A4', style: styles.page },
       React.createElement(View, { style: styles.header },
-        React.createElement(Text, { style: styles.headerTitle }, 'RFLCT · Verbeterpunten & Advies'),
+        React.createElement(Text, { style: styles.headerTitle }, 'RFLCT · Gedetailleerde Feedback'),
+      ),
+
+      React.createElement(View, { style: { ...styles.section, marginBottom: 0 } },
+        React.createElement(Text, { style: styles.sectionTitle }, 'Feedback per indicator'),
+      ),
+
+      ...indicators.map((ind) =>
+        React.createElement(View, { key: ind.key, style: { marginHorizontal: 40, marginTop: 12 } },
+          // Indicator header row
+          React.createElement(View, { style: { flexDirection: 'row', alignItems: 'center', backgroundColor: LIGHT, borderRadius: 6, padding: '7 12', marginBottom: 4 } },
+            React.createElement(Text, { style: { flex: 1, fontSize: 10, fontFamily: 'Helvetica-Bold' } }, ind.label),
+            React.createElement(View, { style: { flex: 3, height: 5, backgroundColor: '#E5E7EB', borderRadius: 3, marginHorizontal: 12 } },
+              React.createElement(View, { style: { height: 5, borderRadius: 3, backgroundColor: verdictColor(ind.verdict), width: `${ind.percentage}%` } }),
+            ),
+            React.createElement(Text, { style: { fontSize: 10, color: verdictColor(ind.verdict), fontFamily: 'Helvetica-Bold', minWidth: 36, textAlign: 'right' } }, `${ind.score}/${ind.maxScore}`),
+          ),
+          // Issues
+          ...ind.issues.map((issue: string, i: number) =>
+            React.createElement(View, { key: `issue-${i}`, style: { ...styles.feedbackItem, paddingLeft: 12 } },
+              React.createElement(Text, { style: { ...styles.feedbackBullet, color: RED } }, '✗'),
+              React.createElement(Text, { style: styles.feedbackText }, issue),
+            ),
+          ),
+          // Strengths
+          ...ind.strengths.map((str: string, i: number) =>
+            React.createElement(View, { key: `str-${i}`, style: { ...styles.feedbackItem, paddingLeft: 12 } },
+              React.createElement(Text, { style: { ...styles.feedbackBullet, color: GREEN } }, '✓'),
+              React.createElement(Text, { style: styles.feedbackText }, str),
+            ),
+          ),
+          // Fallback when no feedback
+          (ind.issues.length === 0 && ind.strengths.length === 0)
+            ? React.createElement(View, { style: { ...styles.feedbackItem, paddingLeft: 12 } },
+                React.createElement(Text, { style: { ...styles.feedbackBullet, color: GREEN } }, '✓'),
+                React.createElement(Text, { style: styles.feedbackText }, 'Geen opmerkingen — deze indicator scoort optimaal.'),
+              )
+            : null,
+        ),
+      ),
+
+      React.createElement(View, { style: styles.footer, fixed: true },
+        React.createElement(Text, { style: styles.footerText }, 'RFLCT · www.rflct.be · info@rflct.be'),
+        React.createElement(Text, { style: styles.footerText }, `Vertrouwelijk · ${scan.email}`),
+      ),
+    ),
+
+    // PAGE 3 — Work points & recommendation
+    React.createElement(Page, { size: 'A4', style: styles.page },
+      React.createElement(View, { style: styles.header },
+        React.createElement(Text, { style: styles.headerTitle }, 'RFLCT · Werkpunten & Advies'),
       ),
 
       workPoints.length > 0
         ? React.createElement(View, { style: styles.section },
-          React.createElement(Text, { style: styles.sectionTitle }, 'Werkpunten'),
+          React.createElement(Text, { style: styles.sectionTitle }, 'Prioritaire werkpunten'),
           ...workPoints.map((pt, i) =>
             React.createElement(View, { key: i, style: styles.workpointItem },
               React.createElement(Text, { style: styles.bullet }, '•'),
@@ -171,7 +224,6 @@ function RflctDocument({ scan }: { scan: ScanRecord }) {
           React.createElement(Text, null, 'Geen kritieke werkpunten gevonden — uw advertentie scoort uitstekend!'),
         ),
 
-      // Recommendation block
       React.createElement(View, { style: { ...styles.section, marginTop: 24 } },
         React.createElement(Text, { style: styles.sectionTitle }, 'Aanbeveling'),
         React.createElement(View, { style: { backgroundColor: NAVY, borderRadius: 8, padding: '16 20' } },
@@ -182,10 +234,10 @@ function RflctDocument({ scan }: { scan: ScanRecord }) {
               : rec === 'BASIS'
               ? 'Met een Basis Pakket verbeteren we uw foto\'s en tekst snel en gericht, zonder grote investering.'
               : rec === 'ONLINE'
-              ? 'Uw advertentie is al kwalitatief, maar extra online zichtbaarheid kan het bereik sterk vergroten.'
+              ? 'Met het Online Pakket boosten we uw zichtbaarheid via gerichte publicatie-aanpak en sociale media — ideaal om meer kopers te bereiken.'
               : rec === 'MICRO'
               ? 'Gerichte micro-diensten lossen de specifieke zwakke punten op en tillen uw advertentie naar een hoger niveau.'
-              : 'Uw advertentie is van uitstekende kwaliteit. Neem contact op als u verder advies wenst.',
+              : 'Uw advertentie is van uitstekende kwaliteit. Het Online Pakket kan uw bereik nog verder vergroten.',
           ),
         ),
       ),

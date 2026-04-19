@@ -40,12 +40,18 @@ export function calculateScores(input: ScoringInput): { breakdown: ScoreBreakdow
     : photoCount < 15 ? 10
     : photoCount < 20 ? 13
     : 15;
+  const photoCountIssues =
+    photoCount === 0 ? ['Geen foto\'s gevonden in de advertentie.']
+    : photoCount < 8 ? [`Slechts ${photoCount} foto('s) gevonden — minimum 15 à 20 aanbevolen voor een sterke presentatie.`]
+    : photoCount < 15 ? [`${photoCount} foto's gevonden — verhoog naar minimaal 15 à 20 voor een optimale presentatie.`]
+    : photoCount < 20 ? [`${photoCount} foto's gevonden — een extra reeks beelden tot 20+ geeft een nog volledigere indruk.`]
+    : [];
   const photoCountIndicator = makeIndicator(
     'photoCount',
     "Aantal foto's",
     photoCountScore,
     15,
-    photoCount < 8 ? [`Slechts ${photoCount} foto('s) gevonden — minimum 15 à 20 aanbevolen voor een sterke presentatie.`] : [],
+    photoCountIssues,
     photoCount >= 20 ? [`${photoCount} foto's aanwezig — uitstekend.`]
     : photoCount >= 15 ? [`${photoCount} foto's aanwezig — goed.`] : [],
   );
@@ -76,7 +82,7 @@ export function calculateScores(input: ScoringInput): { breakdown: ScoreBreakdow
   // 4. EPC (10 pts) — label verplicht, score is bonus
   const hasEpcLabel = listing.compliance.hasEpcLabel || !!listing.epcLabel;
   const hasEpcScore = listing.epcScore !== null;
-  const epcScore = !hasEpcLabel ? 0 : hasEpcScore ? 10 : 10; // label = 10/10; score = bonus info only
+  const epcScore = !hasEpcLabel ? 0 : 10;
   const epcIndicator = makeIndicator(
     'epcCompliance',
     'EPC-informatie',
@@ -102,12 +108,15 @@ export function calculateScores(input: ScoringInput): { breakdown: ScoreBreakdow
 
   // 6. Foto volgorde (10 pts) — schaal 0-100 naar 0-10
   const seqScore = photoCount < 3 ? 6 : (sequenceAnalysis.score / 100) * 10;
+  const seqIssues = photoCount < 3
+    ? ['Te weinig foto\'s om volgorde te beoordelen — voeg meer beelden toe.']
+    : sequenceAnalysis.issues;
   const seqIndicator = makeIndicator(
     'photoSequence',
     'Volgorde van beelden',
     seqScore,
     10,
-    photoCount >= 3 ? sequenceAnalysis.issues : [],
+    seqIssues,
     photoCount >= 3 && sequenceAnalysis.logicalFlow ? ['Logische doorloop van de woning aangehouden.'] : [],
   );
 
@@ -119,6 +128,11 @@ export function calculateScores(input: ScoringInput): { breakdown: ScoreBreakdow
 
   const mandatoryIssues: string[] = [];
   const mandatoryStrengths: string[] = [];
+  if (!listing.compliance.hasRenovationObligation) {
+    mandatoryIssues.push('Renovatieplicht niet teruggevonden in de advertentietekst — verplicht te vermelden voor panden met EPC D of lager.');
+  } else {
+    mandatoryStrengths.push('Renovatieplicht correct vermeld.');
+  }
   if (!listing.compliance.hasAsbestosInfo) {
     mandatoryIssues.push('Asbestattest niet teruggevonden in de advertentietekst.');
   } else {
@@ -145,14 +159,24 @@ export function calculateScores(input: ScoringInput): { breakdown: ScoreBreakdow
   const hasEmail = !!listing.agencyEmail;
   const contactScore = hasName && hasPhone && hasEmail ? 10
     : hasPhone || hasEmail ? 6
-    : 4; // Immoweb always shows contact via platform — neutral score if we can't detect
+    : 4;
+  const contactIssues: string[] = [];
+  if (!hasPhone && !hasEmail) {
+    contactIssues.push('Contactgegevens niet rechtstreeks zichtbaar in de advertentietekst.');
+  } else if (!hasPhone) {
+    contactIssues.push('Telefoonnummer ontbreekt in de advertentietekst — voeg een direct contactnummer toe.');
+  } else if (!hasEmail) {
+    contactIssues.push('E-mailadres ontbreekt in de advertentietekst — voeg een direct e-mailadres toe.');
+  } else if (!hasName) {
+    contactIssues.push('Naam van makelaar of eigenaar ontbreekt in de advertentietekst.');
+  }
   const contactIndicator = makeIndicator(
     'contactInfo',
     'Contactgegevens',
     contactScore,
     10,
-    (!hasPhone && !hasEmail) ? ['Contactgegevens niet rechtstreeks zichtbaar in de advertentietekst.'] : [],
-    (hasPhone && hasEmail) ? ['Volledige contactgegevens aanwezig.'] : [],
+    contactIssues,
+    hasPhone && hasEmail ? ['Volledige contactgegevens aanwezig.'] : [],
   );
 
   const breakdown: ScoreBreakdown = {
@@ -176,24 +200,18 @@ export function calculateScores(input: ScoringInput): { breakdown: ScoreBreakdow
 
 export function deriveRecommendation(
   total: number,
-  breakdown: ScoreBreakdown,
-  listing: ImmowebListing,
+  _breakdown: ScoreBreakdown,
+  _listing: ImmowebListing,
 ): Recommendation {
-  const hasFloorPlan = listing.floorPlans.length > 0;
-  const weakPhotos = breakdown.photoQuality.percentage < 40;
-  const poorText = breakdown.listingText.percentage < 40;
-
-  if (total < 50 && !hasFloorPlan) return 'PRODUCTIE';
-  if (total < 50) return 'BASIS';
-  if (total <= 70 && (weakPhotos || poorText)) return 'MICRO';
-  if (total > 70 && total <= 85) return 'ONLINE';
-  return 'PERFECT';
+  // Always recommend at minimum ONLINE
+  if (total > 85) return 'PERFECT';
+  return 'ONLINE';
 }
 
 export function buildWorkPoints(breakdown: ScoreBreakdown): string[] {
-  // Only return issues from indicators scoring below 70%, max 5 total
+  // Issues from indicators not at 100%, worst-scoring first, max 5 total
   return Object.values(breakdown)
-    .filter((ind) => ind.percentage < 70)
+    .filter((ind) => ind.percentage < 100)
     .sort((a, b) => a.percentage - b.percentage)
     .flatMap((ind) => ind.issues.slice(0, 1))
     .slice(0, 5);

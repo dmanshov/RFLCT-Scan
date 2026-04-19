@@ -92,20 +92,25 @@ export async function POST(req: NextRequest) {
           workPoints: scan.workPoints!,
           recommendation: scan.recommendation!,
         });
-        const sendTo = async (to: string, subject: string) => {
-          try {
-            await sendMail({ to, subject, html, pdfBuffer, pdfFilename: `rflct-scan-${id}.pdf` });
-            console.info('[scan] Email sent to', to);
-          } catch (e) {
-            console.error('[scan] Email failed for', to, e);
-          }
-        };
-        await Promise.all([
-          sendTo(email, `Uw RFLCT Advertentie-scan — score ${total}/100`),
-          sendTo(process.env.RFLCT_EMAIL ?? 'info@rflct.be', `Nieuwe scan: ${listing.title || url} — ${total}/100`),
-        ]);
+        const pdfFilename = `rflct-scan-${id}.pdf`;
+        console.info(`[scan] PDF generated: ${pdfBuffer.length} bytes, sending to ${email} and info@rflct.be`);
+
+        // Send to submitter first, then internal — sequential to avoid SMTP connection issues
+        try {
+          await sendMail({ to: email, subject: `Uw RFLCT Advertentie-scan — score ${total}/100`, html, pdfBuffer, pdfFilename });
+          console.info('[scan] Email sent to submitter:', email);
+        } catch (e) {
+          console.error('[scan] Email to submitter FAILED:', email, String(e));
+        }
+        try {
+          const internalTo = process.env.RFLCT_EMAIL ?? 'info@rflct.be';
+          await sendMail({ to: internalTo, subject: `Nieuwe scan: ${listing.title || url} — ${total}/100`, html, pdfBuffer, pdfFilename });
+          console.info('[scan] Email sent to internal:', internalTo);
+        } catch (e) {
+          console.error('[scan] Email to internal FAILED:', String(e));
+        }
       } catch (mailErr) {
-        console.error('[scan] Email failed:', mailErr);
+        console.error('[scan] PDF/email failed:', mailErr);
       }
 
     } catch (err: unknown) {
