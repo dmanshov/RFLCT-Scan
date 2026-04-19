@@ -108,19 +108,25 @@ export async function analyzeText(title: string, description: string): Promise<T
     messages: [
       {
         role: 'user',
-        content: `Je bent een expert in vastgoedmarketing en copywriting. Analyseer de volgende Immoweb-advertentietekst.
+        content: `Je bent een expert in Belgische vastgoedmarketing. Analyseer deze Immoweb-advertentie kritisch.
 
 Titel: "${title}"
 
 Beschrijving:
 """
-${description.slice(0, 3000)}
+${description.slice(0, 4000)}
 """
 
-Beoordeel (schaal 0–100):
-- Overtuigingskracht: spreekt de doelgroep aan, wekt verlangen, roept emotie op
-- Professionaliteit: geen spelfouten, goede structuur, correcte stijl
-- Volledigheid: alle relevante kenmerken vermeld, niets essentiëls ontbreekt
+Beoordeel streng maar eerlijk op schaal 0–100:
+- Overtuigingskracht: wekt verlangen, spreekt koper emotioneel aan, heeft een duidelijke call-to-action
+- Professionaliteit: correcte spelling, vloeiende stijl, geen clichés, professionele toon
+- Volledigheid: vermeldt ligging, troeven, indeling, staat van het pand, EPC, contactgegevens
+
+Let specifiek op:
+- Zijn contactgegevens (naam, telefoon, e-mail) aanwezig in de tekst?
+- Wordt de ligging (straat, buurt, nabijheid voorzieningen) beschreven?
+- Zijn woonoppervlakte en indeling duidelijk?
+- Is er een call-to-action?
 
 Geef JSON terug (geen andere tekst):
 {
@@ -128,8 +134,8 @@ Geef JSON terug (geen andere tekst):
   "persuasiveness": 0-100,
   "professionalism": 0-100,
   "completeness": 0-100,
-  "issues": ["concreet probleem 1", ...],
-  "strengths": ["concreet sterk punt 1", ...]
+  "issues": ["max 3 concrete verbeterpunten, elk max 1 zin"],
+  "strengths": ["max 2 concrete sterktes, elk max 1 zin"]
 }`,
       },
     ],

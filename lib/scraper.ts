@@ -9,6 +9,35 @@ function extractListingId(url: string): string {
   return match[1];
 }
 
+// ── Strategy 1: Immoweb JSON API via ScraperAPI ───────────────────────────────
+
+async function tryJsonApi(id: string): Promise<Record<string, unknown> | null> {
+  const apiUrl = `https://api.immoweb.be/classified/${id}?language=nl&country=BE`;
+  try {
+    const res = await axios.get('https://api.scraperapi.com/', {
+      params: { api_key: SCRAPER_KEY, url: apiUrl },
+      headers: { Accept: 'application/json' },
+      timeout: 60_000,
+      responseType: 'text',
+    });
+    const text = String(res.data ?? '').trim();
+    if (!text.startsWith('{')) {
+      console.warn('[scraper] JSON API: unexpected response:', text.slice(0, 200));
+      return null;
+    }
+    const obj = JSON.parse(text) as Record<string, unknown>;
+    if (obj?.id || obj?.property) {
+      console.info('[scraper] JSON API ✓');
+      return obj;
+    }
+  } catch (e) {
+    console.warn('[scraper] JSON API failed:', e instanceof Error ? e.message : e);
+  }
+  return null;
+}
+
+// ── Strategy 2: HTML meta tags (limited fallback) ────────────────────────────
+
 function getMeta(html: string, attr: string, val: string): string | null {
   const m = html.match(new RegExp(`<meta[^>]+${attr}=["']${val}["'][^>]+content=["']([^"']+)["']`, 'i'))
     ?? html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+${attr}=["']${val}["']`, 'i'));
@@ -16,75 +45,56 @@ function getMeta(html: string, attr: string, val: string): string | null {
   return m[1].replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
 }
 
-function extractPhotos(html: string): string[] {
-  // Collect all Immoweb CDN image URLs embedded anywhere in the HTML (including unexecuted JS)
+function extractPhotosFromHtml(html: string): string[] {
   const pattern = /https:\/\/(?:media-resize\.immowebstatic\.be|picture\.immoweb\.be)\/classifieds\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp)/gi;
   const found = html.match(pattern) ?? [];
-  // Deduplicate and prefer largest size variant (736x736 over thumbnails)
   const byHash = new Map<string, string>();
   for (const url of found) {
     const hashMatch = url.match(/\/([a-f0-9]{32})\./);
     if (!hashMatch) continue;
     const hash = hashMatch[1];
     const existing = byHash.get(hash);
-    // Prefer higher resolution: 736 > 500 > 300 > smaller
     if (!existing || url.includes('736') || (!existing.includes('736') && url.includes('500'))) {
       byHash.set(hash, url);
     }
   }
+  const ogImage = getMeta(html, 'property', 'og:image');
+  if (ogImage && byHash.size === 0) return [ogImage];
   return Array.from(byHash.values());
 }
 
-function extractFromHtml(html: string, url: string, id: string): ImmowebListing {
+function parseHtmlFallback(html: string, url: string, id: string): ImmowebListing {
   const title = getMeta(html, 'property', 'og:title') ?? '';
   const description = getMeta(html, 'property', 'og:description') ?? getMeta(html, 'name', 'description') ?? '';
 
-  // Parse structured info from title: "Huis te koop in Tielt-Winge - € 519.000 - 3 slaapkamers - 250m² - Immoweb"
-  const propertyType = title.split(' ')[0]?.toUpperCase() ?? 'UNKNOWN';
-
   const cityMatch = title.match(/\bin\s+([^-\d€]+?)\s*(?:\s-|€|\d)/i);
-  const city = cityMatch?.[1]?.trim() ?? '';
-
   const priceMatch = title.match(/€[^\d]*([\d.,]+)/);
-  const price = priceMatch
-    ? parseFloat(priceMatch[1].replace(/\./g, '').replace(',', '.')) || null
-    : null;
-
   const bedroomMatch = title.match(/(\d+)\s*slaapkamer/i);
-  const bedrooms = bedroomMatch ? parseInt(bedroomMatch[1]) : null;
-
   const areaMatch = title.match(/(\d+)\s*m[²2]/i);
-  const area = areaMatch ? parseInt(areaMatch[1]) : null;
-
   const postalMatch = description.match(/\b(\d{4})\b/);
-  const postalCode = postalMatch?.[1] ?? '';
 
-  // EPC: search HTML for label in various formats (meta tags, JSON properties, text)
   const epcLabelMatch =
-    html.match(/["'](?:epcScore|energyClass|epcClass|epcLabel|label)["']\s*:\s*["']([A-G][+]{0,2})["']/i)
-    ?? html.match(/\bEPC[:\s\-–]*([A-G][+]{0,2})\b/i)
-    ?? html.match(/energielabel[:\s]*([A-G][+]{0,2})\b/i);
-  const epcLabel = epcLabelMatch?.[1]?.toUpperCase() ?? null;
+    html.match(/["'](?:epcScore|energyClass|epcClass|epcLabel)["']\s*:\s*["']([A-G][+]{0,2})["']/i)
+    ?? html.match(/\bEPC[:\s\-–]*([A-G][+]{0,2})\b/i);
 
-  const photos = extractPhotos(html);
-
-  const dl = (title + ' ' + description + ' ' + html.slice(0, 50_000)).toLowerCase();
+  const photos = extractPhotosFromHtml(html);
+  const dl = (description + ' ' + html.slice(0, 50_000)).toLowerCase();
 
   return {
     id,
     url,
     title,
     description,
-    price,
-    propertyType,
-    city,
-    postalCode,
+    price: priceMatch ? parseFloat(priceMatch[1].replace(/\./g, '').replace(',', '.')) || null : null,
+    propertyType: title.split(' ')[0]?.toUpperCase() ?? 'UNKNOWN',
+    city: cityMatch?.[1]?.trim() ?? '',
+    postalCode: postalMatch?.[1] ?? '',
     photos,
     floorPlans: [],
     epcScore: null,
-    epcLabel,
-    area,
-    bedrooms,
+    epcLabel: epcLabelMatch?.[1]?.toUpperCase() ?? null,
+    area: areaMatch ? parseInt(areaMatch[1]) : null,
+    bedrooms: bedroomMatch ? parseInt(bedroomMatch[1]) : null,
     bathrooms: null,
     constructionYear: null,
     agencyName: null,
@@ -92,13 +102,80 @@ function extractFromHtml(html: string, url: string, id: string): ImmowebListing 
     agencyEmail: null,
     stats: { daysOnline: null, views: null, saves: null },
     compliance: {
+      hasRenovationObligation: /renovatieplicht|renovatieverplichting/.test(dl),
+      hasAsbestosInfo: /asbest|asbestattest|amiante/.test(dl),
+      hasEpcLabel: !!epcLabelMatch || /\bepc\b/.test(dl),
+      hasFloodRisk: /overstromingsgevoeligheid|watertoets|p-score|g-score/.test(dl),
+    },
+  };
+}
+
+// ── Parse full JSON API response ──────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseJsonApi(raw: any, url: string, id: string): ImmowebListing {
+  const property = raw?.property ?? {};
+  const transaction = raw?.transaction ?? {};
+  const energy = property?.energy ?? raw?.energy ?? {};
+  const location = property?.location ?? raw?.location ?? {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const firstCustomer: any = (raw?.customers ?? [])[0] ?? {};
+
+  const descObj = raw?.description ?? {};
+  const description: string =
+    typeof descObj === 'string' ? descObj : descObj?.nl ?? descObj?.fr ?? descObj?.en ?? '';
+
+  const title: string = raw?.cluster?.title ?? raw?.propertyName ?? raw?.title ?? '';
+
+  const photos: string[] = [];
+  const floorPlans: string[] = [];
+  for (const pic of (raw?.media?.pictures ?? []) as unknown[]) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p = pic as any;
+    const picUrl: string = p.largeUrl ?? p.url ?? p.mediumUrl ?? '';
+    if (!picUrl) continue;
+    (p.type === 'FLOOR_PLAN' || p.category === 'FLOOR_PLAN' ? floorPlans : photos).push(picUrl);
+  }
+
+  const epcScore: number | null = energy.primaryEnergyConsumptionPerSqm ?? energy.primaryEnergyConsumption ?? null;
+  const epcLabel: string | null = energy.epcScore ?? energy.energyClass ?? null;
+
+  let daysOnline: number | null = null;
+  const pubStr: string | null = raw?.publication?.publicationDate ?? raw?.publicationDate ?? null;
+  if (pubStr) daysOnline = Math.floor((Date.now() - new Date(pubStr).getTime()) / 86_400_000);
+
+  const dl = description.toLowerCase();
+  return {
+    id: String(raw?.id ?? id),
+    url,
+    title,
+    description,
+    price: transaction?.sale?.price ?? raw?.price?.mainValue ?? null,
+    propertyType: property?.type ?? raw?.type ?? 'UNKNOWN',
+    city: location?.locality ?? location?.municipality ?? '',
+    postalCode: String(location?.postalCode ?? ''),
+    photos,
+    floorPlans,
+    epcScore,
+    epcLabel,
+    area: property?.netHabitableSurface ?? property?.livingArea ?? null,
+    bedrooms: property?.bedroomCount ?? null,
+    bathrooms: property?.bathroomCount ?? null,
+    constructionYear: property?.building?.constructionYear ?? null,
+    agencyName: firstCustomer?.name ?? null,
+    agencyPhone: firstCustomer?.phone ?? null,
+    agencyEmail: firstCustomer?.email ?? null,
+    stats: { daysOnline, views: null, saves: null },
+    compliance: {
       hasRenovationObligation: /renovatieplicht|renovatieverplichting|r[eé]novation obligatoire/.test(dl),
       hasAsbestosInfo: /asbest|asbestattest|amiante/.test(dl),
-      hasEpcLabel: !!epcLabel || /\bepc\b/.test(dl),
+      hasEpcLabel: !!epcLabel,
       hasFloodRisk: /overstromingsgevoeligheid|watertoets|risque d.inondation|p-score|g-score/.test(dl),
     },
   };
 }
+
+// ── Public entry point ────────────────────────────────────────────────────────
 
 export async function scrapeImmowebListing(url: string): Promise<ImmowebListing> {
   if (!url.includes('immoweb.be')) {
@@ -106,19 +183,22 @@ export async function scrapeImmowebListing(url: string): Promise<ImmowebListing>
   }
 
   const id = extractListingId(url);
-  const cleanUrl = url.split('?')[0];
 
+  // Strategy 1: JSON API via ScraperAPI — returns full data incl. all photos
+  const jsonData = await tryJsonApi(id);
+  if (jsonData) return parseJsonApi(jsonData, url, id);
+
+  // Strategy 2: HTML fallback — limited data from meta tags only
+  console.warn('[scraper] Falling back to HTML meta tags — limited data');
   const res = await axios.get('https://api.scraperapi.com/', {
-    params: { api_key: SCRAPER_KEY, url: cleanUrl, render: 'false' },
+    params: { api_key: SCRAPER_KEY, url: url.split('?')[0], render: 'false' },
     timeout: 90_000,
     responseType: 'arraybuffer',
   });
 
   const html = Buffer.from(res.data as ArrayBuffer).toString('utf8');
-
   if (html.length < 1000) {
     throw new Error(`Pagina kon niet worden opgehaald (${html.length} bytes). Controleer de ScraperAPI-credits.`);
   }
-
-  return extractFromHtml(html, url, id);
+  return parseHtmlFallback(html, url, id);
 }

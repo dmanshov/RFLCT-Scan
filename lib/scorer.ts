@@ -73,19 +73,19 @@ export function calculateScores(input: ScoringInput): { breakdown: ScoreBreakdow
     has3D ? ['3D-grondplan aanwezig — maximale transparantie voor de koper.'] : [],
   );
 
-  // 4. EPC (10 pts)
+  // 4. EPC (10 pts) — label verplicht, score is bonus
   const hasEpcLabel = listing.compliance.hasEpcLabel || !!listing.epcLabel;
   const hasEpcScore = listing.epcScore !== null;
-  const epcScore = hasEpcLabel ? (hasEpcScore ? 10 : 7) : 0;
+  const epcScore = !hasEpcLabel ? 0 : hasEpcScore ? 10 : 10; // label = 10/10; score = bonus info only
   const epcIndicator = makeIndicator(
     'epcCompliance',
     'EPC-informatie',
     epcScore,
     10,
-    !hasEpcLabel ? ['EPC-label niet teruggevonden in de advertentie — verplicht te vermelden conform VEKA-regelgeving.'] : [],
+    !hasEpcLabel ? ['EPC-label niet teruggevonden in de advertentie — verplicht conform VEKA-regelgeving.'] : [],
     [
-      ...(hasEpcLabel ? [`EPC-label${listing.epcLabel ? ` ${listing.epcLabel}` : ''} vermeld.`] : []),
-      ...(hasEpcScore ? [`EPC-kengetal ${listing.epcScore} kWh/m²/jaar aanwezig.`] : []),
+      ...(hasEpcLabel ? [`EPC-label${listing.epcLabel ? ` ${listing.epcLabel}` : ''} aanwezig.`] : []),
+      ...(hasEpcScore ? [`EPC-kengetal ${listing.epcScore} kWh/m²/jaar vermeld.`] : []),
     ],
   );
 
