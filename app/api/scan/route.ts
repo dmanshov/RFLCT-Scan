@@ -84,7 +84,6 @@ export async function POST(req: NextRequest) {
       // Step 4 — PDF + email (awaited before closing stream — keeps function alive)
       emit({ type: 'status', message: 'Rapport versturen per e-mail…' });
       try {
-        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://rflct-scan.vercel.app';
         const pdfBuffer = await generateScanPdf(scan);
         const html = buildResultEmailHtml({
           name: listing.agencyName,
@@ -92,25 +91,19 @@ export async function POST(req: NextRequest) {
           totalScore: total,
           workPoints: scan.workPoints!,
           recommendation: scan.recommendation!,
-          reportUrl: `${baseUrl}/scan/${id}`,
         });
+        const sendTo = async (to: string, subject: string) => {
+          try {
+            await sendMail({ to, subject, html, pdfBuffer, pdfFilename: `rflct-scan-${id}.pdf` });
+            console.info('[scan] Email sent to', to);
+          } catch (e) {
+            console.error('[scan] Email failed for', to, e);
+          }
+        };
         await Promise.all([
-          sendMail({
-            to: email,
-            subject: `Uw RFLCT Advertentie-scan — score ${total}/100`,
-            html,
-            pdfBuffer,
-            pdfFilename: `rflct-scan-${id}.pdf`,
-          }),
-          sendMail({
-            to: process.env.RFLCT_EMAIL ?? 'info@rflct.be',
-            subject: `Nieuwe scan: ${listing.title || url} — ${total}/100`,
-            html,
-            pdfBuffer,
-            pdfFilename: `rflct-scan-${id}.pdf`,
-          }),
+          sendTo(email, `Uw RFLCT Advertentie-scan — score ${total}/100`),
+          sendTo(process.env.RFLCT_EMAIL ?? 'info@rflct.be', `Nieuwe scan: ${listing.title || url} — ${total}/100`),
         ]);
-        console.info('[scan] Email sent to', email);
       } catch (mailErr) {
         console.error('[scan] Email failed:', mailErr);
       }

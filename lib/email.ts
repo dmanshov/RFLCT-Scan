@@ -43,9 +43,8 @@ export function buildResultEmailHtml(opts: {
   totalScore: number;
   workPoints: string[];
   recommendation: string;
-  reportUrl: string;
 }): string {
-  const { name, url, totalScore, workPoints, recommendation, reportUrl } = opts;
+  const { name, url, totalScore, workPoints, recommendation } = opts;
   const greeting = name ? `Beste ${name}` : 'Beste';
 
   return `<!DOCTYPE html>
@@ -94,11 +93,11 @@ export function buildResultEmailHtml(opts: {
         : ''
     }
 
-    <p>Bekijk uw volledige scorekaart en selecteer de diensten die u wenst:</p>
-    <a class="cta" href="${reportUrl}">Rapport bekijken</a>
+    <p>Heeft u vragen of wenst u een van onze diensten? Ons team staat klaar om u verder te helpen.</p>
+    <a class="cta" href="https://www.rflct.be">Bezoek rflct.be</a>
 
     <p style="margin-top:32px;font-size:13px;color:#6B7280;">
-      Heeft u vragen? Stuur een e-mail naar <a href="mailto:info@rflct.be">info@rflct.be</a> — ons team helpt u graag verder.
+      Of stuur een e-mail naar <a href="mailto:info@rflct.be">info@rflct.be</a> — wij nemen contact met u op.
     </p>
   </div>
   <div class="footer">

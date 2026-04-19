@@ -86,13 +86,13 @@ async function tryScraperApiRender(id: string, originalUrl: string): Promise<Rec
       }
     }
 
-    // Fallback: use meta tags from rendered page
-    console.info('[scraper] ScraperAPI render → using meta tags');
+    // No JSON data found — return rendered HTML for meta/photo extraction
+    console.info('[scraper] ScraperAPI render → HTML fallback');
     return { _htmlFallback: html } as Record<string, unknown>;
   } catch (e) {
     console.warn('[scraper] ScraperAPI render:', e instanceof Error ? e.message : e);
+    return null;
   }
-  return null;
 }
 
 
@@ -104,8 +104,10 @@ function getMeta(html: string, attr: string, val: string): string | null {
 }
 
 function extractPhotosFromHtml(html: string): string[] {
+  // Unescape JSON-encoded slashes (\/) so URLs embedded in JS source are found
+  const searchable = html.replace(/\\\//g, '/');
   const pattern = /https:\/\/(?:media-resize\.immowebstatic\.be|picture\.immoweb\.be)\/classifieds\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp)/gi;
-  const found = html.match(pattern) ?? [];
+  const found = searchable.match(pattern) ?? [];
   const byHash = new Map<string, string>();
   for (const url of found) {
     const hashMatch = url.match(/\/([a-f0-9]{32})\./);
@@ -117,7 +119,7 @@ function extractPhotosFromHtml(html: string): string[] {
     }
   }
   const ogImage = getMeta(html, 'property', 'og:image');
-  if (ogImage && byHash.size === 0) return [ogImage];
+  if (byHash.size === 0) return ogImage ? [ogImage] : [];
   return Array.from(byHash.values());
 }
 
