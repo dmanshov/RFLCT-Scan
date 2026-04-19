@@ -9,9 +9,34 @@ function extractListingId(url: string): string {
   return match[1];
 }
 
-// ── Strategy 1: Immoweb JSON API via ScraperAPI ───────────────────────────────
+// ── Strategy 1: Direct Immoweb JSON API (works in local dev, often blocked on Vercel) ──
 
-async function tryJsonApi(id: string): Promise<Record<string, unknown> | null> {
+async function tryDirectApi(id: string): Promise<Record<string, unknown> | null> {
+  try {
+    const res = await axios.get(`https://api.immoweb.be/classified/${id}`, {
+      params: { language: 'nl', country: 'BE' },
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36',
+        'Accept-Language': 'nl-BE,nl;q=0.9',
+        Referer: 'https://www.immoweb.be/',
+      },
+      timeout: 10_000,
+      responseType: 'text',
+    });
+    const text = String(res.data ?? '').trim();
+    if (!text.startsWith('{')) return null;
+    const obj = JSON.parse(text) as Record<string, unknown>;
+    if (obj?.id || obj?.property) { console.info('[scraper] Direct API ✓'); return obj; }
+  } catch (e) {
+    console.warn('[scraper] Direct API:', e instanceof Error ? e.message : e);
+  }
+  return null;
+}
+
+// ── Strategy 2: Immoweb JSON API via ScraperAPI ───────────────────────────────
+
+async function tryScraperApiJson(id: string): Promise<Record<string, unknown> | null> {
   const apiUrl = `https://api.immoweb.be/classified/${id}?language=nl&country=BE`;
   try {
     const res = await axios.get('https://api.scraperapi.com/', {
@@ -21,17 +46,11 @@ async function tryJsonApi(id: string): Promise<Record<string, unknown> | null> {
       responseType: 'text',
     });
     const text = String(res.data ?? '').trim();
-    if (!text.startsWith('{')) {
-      console.warn('[scraper] JSON API: unexpected response:', text.slice(0, 200));
-      return null;
-    }
+    if (!text.startsWith('{')) { console.warn('[scraper] ScraperAPI JSON: unexpected:', text.slice(0, 200)); return null; }
     const obj = JSON.parse(text) as Record<string, unknown>;
-    if (obj?.id || obj?.property) {
-      console.info('[scraper] JSON API ✓');
-      return obj;
-    }
+    if (obj?.id || obj?.property) { console.info('[scraper] ScraperAPI JSON ✓'); return obj; }
   } catch (e) {
-    console.warn('[scraper] JSON API failed:', e instanceof Error ? e.message : e);
+    console.warn('[scraper] ScraperAPI JSON:', e instanceof Error ? e.message : e);
   }
   return null;
 }
@@ -184,21 +203,28 @@ export async function scrapeImmowebListing(url: string): Promise<ImmowebListing>
 
   const id = extractListingId(url);
 
-  // Strategy 1: JSON API via ScraperAPI — returns full data incl. all photos
-  const jsonData = await tryJsonApi(id);
-  if (jsonData) return parseJsonApi(jsonData, url, id);
+  // Strategy 1: Direct API (free, works outside Vercel datacenter)
+  const direct = await tryDirectApi(id);
+  if (direct) return parseJsonApi(direct, url, id);
 
-  // Strategy 2: HTML fallback — limited data from meta tags only
-  console.warn('[scraper] Falling back to HTML meta tags — limited data');
-  const res = await axios.get('https://api.scraperapi.com/', {
-    params: { api_key: SCRAPER_KEY, url: url.split('?')[0], render: 'false' },
-    timeout: 90_000,
-    responseType: 'arraybuffer',
-  });
+  // Strategy 2: JSON API via ScraperAPI (residential proxy)
+  const scraperJson = await tryScraperApiJson(id);
+  if (scraperJson) return parseJsonApi(scraperJson, url, id);
 
-  const html = Buffer.from(res.data as ArrayBuffer).toString('utf8');
-  if (html.length < 1000) {
-    throw new Error(`Pagina kon niet worden opgehaald (${html.length} bytes). Controleer de ScraperAPI-credits.`);
+  // Strategy 3: HTML page via ScraperAPI (limited data — meta tags only)
+  console.warn('[scraper] Falling back to HTML meta tags');
+  try {
+    const res = await axios.get('https://api.scraperapi.com/', {
+      params: { api_key: SCRAPER_KEY, url: url.split('?')[0], render: 'false' },
+      timeout: 90_000,
+      responseType: 'arraybuffer',
+    });
+    const html = Buffer.from(res.data as ArrayBuffer).toString('utf8');
+    if (html.length < 1000) throw new Error(`Pagina te klein (${html.length} bytes)`);
+    return parseHtmlFallback(html, url, id);
+  } catch (e) {
+    throw new Error(
+      `Kon de advertentie niet ophalen. Controleer de ScraperAPI-sleutel en credits. (${e instanceof Error ? e.message : e})`
+    );
   }
-  return parseHtmlFallback(html, url, id);
 }
