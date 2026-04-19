@@ -2,6 +2,7 @@ import nodemailer from 'nodemailer';
 
 interface MailOptions {
   to: string;
+  cc?: string;
   subject: string;
   html: string;
   pdfBuffer?: Buffer;
@@ -29,6 +30,7 @@ export async function sendMail(opts: MailOptions) {
   await transport.sendMail({
     from: process.env.SMTP_FROM ?? '"RFLCT Advertentie-scan" <noreply@rflct.be>',
     to: opts.to,
+    ...(opts.cc ? { cc: opts.cc } : {}),
     subject: opts.subject,
     html: opts.html,
     attachments: opts.pdfBuffer

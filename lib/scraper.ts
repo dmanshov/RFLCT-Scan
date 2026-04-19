@@ -16,6 +16,52 @@ function getMeta(html: string, attr: string, val: string): string | null {
   return m[1].replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)));
 }
 
+function unescapeJson(s: string): string {
+  return s
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '')
+    .replace(/\\t/g, '\t')
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\')
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+}
+
+// Extract the full listing description from the embedded JS/JSON blob in the HTML.
+// Immoweb embeds listing data as a JSON object in a <script> tag.
+function extractFullDescription(html: string): string | null {
+  const searchable = html.replace(/\\\//g, '/');
+
+  // Pattern 1: localized object — "description":{"nl":"..."}
+  const nlMatch = searchable.match(/"description"\s*:\s*\{\s*"nl"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (nlMatch && nlMatch[1].length > 80) return unescapeJson(nlMatch[1]);
+
+  // Pattern 2: localized object — try fr or en if nl is null/empty
+  const langMatch = searchable.match(/"description"\s*:\s*\{[^}]{0,40}"(?:fr|en)"\s*:\s*"((?:[^"\\]|\\.){80,})"/);
+  if (langMatch) return unescapeJson(langMatch[1]);
+
+  // Pattern 3: plain string value (must be substantially longer than a meta description)
+  const simpleMatch = searchable.match(/"description"\s*:\s*"((?:[^"\\]|\\.){200,})"/);
+  if (simpleMatch) return unescapeJson(simpleMatch[1]);
+
+  return null;
+}
+
+// Extract Belgian phone number from arbitrary text
+function extractPhone(text: string): string | null {
+  const m = text.match(/\b(0[1-9]\d{7,8}|\+32\s?\d[\d\s.]{7,11})\b/);
+  return m ? m[1].replace(/\s/g, '') : null;
+}
+
+// Extract email address from arbitrary text (skips common image/asset extensions)
+function extractEmailAddress(text: string): string | null {
+  const m = text.match(/\b([a-zA-Z0-9._%+\-]{2,}@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,6})\b/);
+  if (!m) return null;
+  const addr = m[1];
+  // Ignore addresses that look like assets or tracking pixels
+  if (/\.(png|jpg|gif|svg|webp|css|js)$/i.test(addr)) return null;
+  return addr;
+}
+
 function extractPhotos(html: string): string[] {
   // Unescape \/ (JSON-encoded slashes in JS source) before searching
   const searchable = html.replace(/\\\//g, '/');
@@ -102,13 +148,29 @@ function parseJsonApi(raw: any, url: string, id: string): ImmowebListing {
 
 function parseHtmlFallback(html: string, url: string, id: string): ImmowebListing {
   const title = getMeta(html, 'property', 'og:title') ?? '';
-  const description = getMeta(html, 'property', 'og:description') ?? getMeta(html, 'name', 'description') ?? '';
+
+  // Try to extract full description from embedded JS/JSON blob first
+  const fullDescription = extractFullDescription(html);
+  const description = fullDescription
+    ?? getMeta(html, 'property', 'og:description')
+    ?? getMeta(html, 'name', 'description')
+    ?? '';
+
+  console.info(`[scraper] Description: ${fullDescription ? `JS blob (${description.length} chars)` : `meta tag (${description.length} chars)`}`);
+
+  // Extract contact info from description text first, then broader HTML search
+  const agencyPhone = extractPhone(description) ?? extractPhone(html.slice(0, 150_000));
+  const agencyEmail = extractEmailAddress(description) ?? extractEmailAddress(html.slice(0, 150_000));
+  console.info(`[scraper] Contact — phone: ${agencyPhone ?? 'not found'}, email: ${agencyEmail ?? 'not found'}`);
 
   const cityMatch = title.match(/\bin\s+([^-\d€]+?)\s*(?:\s-|€|\d)/i);
   const priceMatch = title.match(/€[^\d]*([\d.,]+)/);
-  const bedroomMatch = title.match(/(\d+)\s*slaapkamer/i);
-  const areaMatch = title.match(/(\d+)\s*m[²2]/i);
-  const postalMatch = description.match(/\b(\d{4})\b/);
+  const bedroomMatch = title.match(/(\d+)\s*slaapkamer/i)
+    ?? description.match(/(\d+)\s*slaapkamer/i);
+  const areaMatch = title.match(/(\d+)\s*m[²2]/i)
+    ?? description.match(/(\d+)\s*m[²2]/i);
+  const postalMatch = description.match(/\b(\d{4})\b/)
+    ?? title.match(/\b(\d{4})\b/);
 
   const epcLabelMatch =
     html.match(/["'](?:epcScore|energyClass|epcLabel)["']\s*:\s*["']([A-G][+]{0,2})["']/i)
@@ -135,8 +197,8 @@ function parseHtmlFallback(html: string, url: string, id: string): ImmowebListin
     bathrooms: null,
     constructionYear: null,
     agencyName: null,
-    agencyPhone: null,
-    agencyEmail: null,
+    agencyPhone,
+    agencyEmail,
     stats: { daysOnline: null, views: null, saves: null },
     compliance: {
       hasRenovationObligation: /renovatieplicht|renovatieverplichting/.test(dl),
