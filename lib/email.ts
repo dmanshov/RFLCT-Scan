@@ -21,6 +21,10 @@ function createTransport() {
 }
 
 export async function sendMail(opts: MailOptions) {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    console.warn('[email] SMTP not configured — skipping send to', opts.to);
+    return;
+  }
   const transport = createTransport();
   await transport.sendMail({
     from: process.env.SMTP_FROM ?? '"RFLCT Advertentie-scan" <noreply@rflct.be>',

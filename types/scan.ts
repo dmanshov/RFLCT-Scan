@@ -55,7 +55,6 @@ export interface ScoreBreakdown {
   photoSequence: ScoreIndicator;
   mandatoryInfo: ScoreIndicator;
   contactInfo: ScoreIndicator;
-  statistics: ScoreIndicator;
 }
 
 export interface ScanRecord {
@@ -89,15 +88,15 @@ export const SERVICES: ServiceOption[] = [
     id: 'productie',
     category: 'package',
     name: 'Productie Pakket',
-    description: 'Volledige professionele presentatie van uw woning: fotoreportage, 2D & 3D grondplannen, advertentietekst en EPC-visualisatie.',
-    tags: ['Fotoreportage', '2D & 3D Grondplan', 'Advertentietekst', 'EPC-visualisatie'],
+    description: 'Volledige professionele presentatie van uw woning: fotoreportage, isometrisch 3D-grondplan, advertentietekst en EPC-visualisatie.',
+    tags: ['Fotoreportage', '3D Grondplan', 'Advertentietekst', 'EPC-visualisatie'],
   },
   {
     id: 'basis',
     category: 'package',
     name: 'Basis Pakket',
-    description: 'Professionele fotoreportage (8 foto\'s) en een herschreven advertentietekst om uw presentatie snel te verbeteren.',
-    tags: ['Fotoreportage (8 foto\'s)', 'Advertentietekst'],
+    description: 'Professionele fotoreportage en een herschreven advertentietekst om uw presentatie snel te verbeteren.',
+    tags: ['Fotoreportage', 'Advertentietekst'],
   },
   {
     id: 'online',
@@ -109,36 +108,64 @@ export const SERVICES: ServiceOption[] = [
   {
     id: 'micro-foto',
     category: 'micro',
-    name: 'Fotorenovatie',
-    description: 'Professionele nabewerking van uw bestaande foto\'s: belichting, witbalans en perspectief gecorrigeerd.',
-    tags: ['Belichting', 'Kleurcorrectie', 'Perspectief'],
-  },
-  {
-    id: 'micro-plan2d',
-    category: 'micro',
-    name: 'Grondplan 2D',
-    description: 'Professioneel opgemeten en getekend 2D-grondplan conform vastgoedstandaarden.',
-    tags: ['2D Grondplan', 'Schaal', 'Oriëntatie'],
+    name: 'Digitale foto retouche',
+    description: 'Professionele nabewerking van max. 15 bestaande foto\'s: belichting, witbalans en perspectief gecorrigeerd.',
+    tags: ['Max. 15 beelden', 'Belichting', 'Kleurcorrectie'],
   },
   {
     id: 'micro-plan3d',
     category: 'micro',
-    name: 'Grondplan 3D',
-    description: 'Fotorealistisch 3D-grondplan dat kopers helpt de ruimte te visualiseren.',
-    tags: ['3D Visualisatie', 'Fotorealistisch'],
+    name: 'Isometrisch 3D-grondplan',
+    description: 'Fotorealistisch isometrisch 3D-grondplan dat kopers helpt de ruimte te visualiseren.',
+    tags: ['3D Visualisatie', 'Isometrisch'],
   },
   {
-    id: 'micro-tekst',
+    id: 'micro-styling',
     category: 'micro',
-    name: 'Advertentietekst',
-    description: 'Professioneel geschreven advertentietekst die overtuigt en converteert.',
-    tags: ['Copywriting', 'SEO-geoptimaliseerd'],
+    name: 'Virtual styling / 3D-inrichting',
+    description: 'Virtuele 3D-inrichting per ruimte — ideaal om lege of verouderde ruimtes aantrekkelijk voor te stellen.',
+    tags: ['Per ruimte', 'Virtual staging'],
   },
   {
-    id: 'micro-epc',
+    id: 'micro-webpagina',
     category: 'micro',
-    name: 'EPC-visualisatie',
-    description: 'Duidelijke grafische weergave van uw EPC-label conform VEKA-regelgeving.',
-    tags: ['VEKA-conform', 'Grafisch', 'Transparant'],
+    name: 'Persoonlijke RFLCT-webpagina',
+    description: 'Een eigen landingspagina voor uw woning op het RFLCT-platform, los van Immoweb.',
+    tags: ['Eigen pagina', 'RFLCT-platform'],
+  },
+  {
+    id: 'micro-social',
+    category: 'micro',
+    name: 'Social-media-vermelding',
+    description: 'Professionele post + reel van uw woning op onze sociale media kanalen.',
+    tags: ['Post + Reel', 'Social media'],
+  },
+  {
+    id: 'micro-meta',
+    category: 'micro',
+    name: 'Meta-advertentiecampagne',
+    description: '1 week gerichte Meta-advertentiecampagne (Facebook/Instagram), excl. mediabudget.',
+    tags: ['1 week', 'Facebook & Instagram'],
+  },
+  {
+    id: 'micro-premium',
+    category: 'micro',
+    name: 'Premium Immoweb (1 maand)',
+    description: 'Upgrade van uw advertentie naar Premium-zichtbaarheid op Immoweb gedurende 1 maand, zonder coaching.',
+    tags: ['1 maand', 'Premium zichtbaarheid'],
+  },
+  {
+    id: 'micro-verlenging',
+    category: 'micro',
+    name: 'Verlenging advertenties (1 maand)',
+    description: 'Verlenging van uw bestaande advertenties op alle platformen met 1 extra maand.',
+    tags: ['1 maand verlenging'],
+  },
+  {
+    id: 'micro-gevelbord',
+    category: 'micro',
+    name: 'Gevelbord',
+    description: 'Professioneel RFLCT-gevelbord op maat, geplaatst voor uw woning.',
+    tags: ['Ter plaatse', 'Zichtbaarheid'],
   },
 ];

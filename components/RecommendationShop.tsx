@@ -11,10 +11,18 @@ interface Props {
   totalScore: number;
 }
 
-const REC_DEFAULTS: Record<Recommendation, string[]> = {
-  PRODUCTIE: ['productie'],
-  BASIS: ['basis'],
-  ONLINE: ['online'],
+const REC_DEFAULT_PACKAGE: Record<Recommendation, string | null> = {
+  PRODUCTIE: 'productie',
+  BASIS: 'basis',
+  ONLINE: 'online',
+  MICRO: null,
+  PERFECT: null,
+};
+
+const REC_DEFAULT_MICROS: Record<Recommendation, string[]> = {
+  PRODUCTIE: [],
+  BASIS: [],
+  ONLINE: [],
   MICRO: ['micro-foto', 'micro-tekst'],
   PERFECT: [],
 };
@@ -22,11 +30,11 @@ const REC_DEFAULTS: Record<Recommendation, string[]> = {
 const REC_HEADLINE: Record<Recommendation, { title: string; body: string }> = {
   PRODUCTIE: {
     title: 'Productie Pakket aanbevolen',
-    body: 'Uw advertentie mist essentiële elementen. Een volledige productieopdracht brengt uw presentatie direct naar het hoogste niveau en verkortt de verkooptijd.',
+    body: 'Uw advertentie mist essentiële elementen. Een volledige productieopdracht brengt uw presentatie direct naar het hoogste niveau en verkort de verkooptijd.',
   },
   BASIS: {
     title: 'Basis Pakket aanbevolen',
-    body: 'Met gerichte verbeteringen aan foto\'s en tekst pakt u de voornaamste zwakke punten aan zonder grote investering.',
+    body: "Met gerichte verbeteringen aan foto's en tekst pakt u de voornaamste zwakke punten aan zonder grote investering.",
   },
   ONLINE: {
     title: 'Online Pakket aanbevolen',
@@ -43,7 +51,8 @@ const REC_HEADLINE: Record<Recommendation, { title: string; body: string }> = {
 };
 
 export default function RecommendationShop({ recommendation, scanId, totalScore }: Props) {
-  const [selected, setSelected] = useState<Set<string>>(new Set(REC_DEFAULTS[recommendation]));
+  const [selectedPackage, setSelectedPackage] = useState<string | null>(REC_DEFAULT_PACKAGE[recommendation]);
+  const [selectedMicros, setSelectedMicros] = useState<Set<string>>(new Set(REC_DEFAULT_MICROS[recommendation]));
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -51,8 +60,8 @@ export default function RecommendationShop({ recommendation, scanId, totalScore 
 
   const { title, body } = REC_HEADLINE[recommendation];
 
-  function toggle(id: string) {
-    setSelected((prev) => {
+  function toggleMicro(id: string) {
+    setSelectedMicros((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -60,9 +69,14 @@ export default function RecommendationShop({ recommendation, scanId, totalScore 
     });
   }
 
+  const allSelected = [
+    ...(selectedPackage ? [selectedPackage] : []),
+    ...Array.from(selectedMicros),
+  ];
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (selected.size === 0) {
+    if (allSelected.length === 0) {
       setError('Selecteer minstens één dienst om een offerte aan te vragen.');
       return;
     }
@@ -72,7 +86,7 @@ export default function RecommendationShop({ recommendation, scanId, totalScore 
       const res = await fetch('/api/quote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scanId, selectedServices: Array.from(selected), message }),
+        body: JSON.stringify({ scanId, selectedServices: allSelected, message }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Onbekende fout');
@@ -101,7 +115,6 @@ export default function RecommendationShop({ recommendation, scanId, totalScore 
 
   return (
     <section className="space-y-8 animate-fade-in">
-      {/* Recommendation header */}
       <div className="bg-brand-dark rounded-xl p-8">
         <p className="text-brand-gold text-xs font-bold uppercase tracking-widest mb-2">Onze aanbeveling</p>
         <h2 className="text-white font-bold text-2xl mb-3">{title}</h2>
@@ -109,23 +122,21 @@ export default function RecommendationShop({ recommendation, scanId, totalScore 
       </div>
 
       <form onSubmit={submit} className="space-y-8">
-        {/* Packages */}
+        {/* Packages — radio buttons (één keuze) */}
         <div>
           <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Pakketten</h3>
           <div className="grid sm:grid-cols-3 gap-4">
             {packages.map((svc) => {
-              const isSelected = selected.has(svc.id);
-              const isRec = REC_DEFAULTS[recommendation].includes(svc.id);
+              const isSelected = selectedPackage === svc.id;
+              const isRec = REC_DEFAULT_PACKAGE[recommendation] === svc.id;
               return (
                 <button
                   key={svc.id}
                   type="button"
-                  onClick={() => toggle(svc.id)}
+                  onClick={() => setSelectedPackage(isSelected ? null : svc.id)}
                   className={clsx(
                     'text-left p-5 rounded-lg border-2 transition-all duration-200 relative',
-                    isSelected
-                      ? 'border-brand-gold bg-brand-gold/5'
-                      : 'border-gray-100 hover:border-brand-gold/40',
+                    isSelected ? 'border-brand-gold bg-brand-gold/5' : 'border-gray-100 hover:border-brand-gold/40',
                   )}
                 >
                   {isRec && (
@@ -134,20 +145,19 @@ export default function RecommendationShop({ recommendation, scanId, totalScore 
                     </span>
                   )}
                   <div className="flex items-start gap-3 mb-3">
+                    {/* Radio indicator */}
                     <div className={clsx(
-                      'w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors',
+                      'w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors',
                       isSelected ? 'border-brand-gold bg-brand-gold' : 'border-gray-300',
                     )}>
-                      {isSelected && <span className="text-brand-dark text-xs font-bold">✓</span>}
+                      {isSelected && <span className="w-2 h-2 rounded-full bg-brand-dark block" />}
                     </div>
                     <h4 className="font-bold text-gray-900 text-sm">{svc.name}</h4>
                   </div>
                   <p className="text-gray-500 text-xs leading-relaxed mb-3">{svc.description}</p>
                   <div className="flex flex-wrap gap-1">
                     {svc.tags.map((t) => (
-                      <span key={t} className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">
-                        {t}
-                      </span>
+                      <span key={t} className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{t}</span>
                     ))}
                   </div>
                 </button>
@@ -156,23 +166,21 @@ export default function RecommendationShop({ recommendation, scanId, totalScore 
           </div>
         </div>
 
-        {/* Micro services */}
+        {/* Micro-diensten — checkboxes (meerdere keuzes) */}
         <div>
           <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Losse micro-diensten</h3>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {micros.map((svc) => {
-              const isSelected = selected.has(svc.id);
-              const isRec = REC_DEFAULTS[recommendation].includes(svc.id);
+              const isSelected = selectedMicros.has(svc.id);
+              const isRec = REC_DEFAULT_MICROS[recommendation].includes(svc.id);
               return (
                 <button
                   key={svc.id}
                   type="button"
-                  onClick={() => toggle(svc.id)}
+                  onClick={() => toggleMicro(svc.id)}
                   className={clsx(
                     'text-left p-4 rounded-lg border-2 transition-all duration-200',
-                    isSelected
-                      ? 'border-brand-gold bg-brand-gold/5'
-                      : 'border-gray-100 hover:border-brand-gold/40',
+                    isSelected ? 'border-brand-gold bg-brand-gold/5' : 'border-gray-100 hover:border-brand-gold/40',
                   )}
                 >
                   <div className="flex items-center gap-2 mb-2">
@@ -205,26 +213,20 @@ export default function RecommendationShop({ recommendation, scanId, totalScore 
           />
         </div>
 
-        {/* Selected summary */}
-        {selected.size > 0 && (
-          <div className="bg-brand-off-white rounded-lg p-4 flex items-center justify-between gap-4 flex-wrap">
-            <div>
-              <p className="text-xs text-gray-500 mb-1">Geselecteerd</p>
-              <p className="text-sm font-semibold text-gray-800">
-                {Array.from(selected).map((id) => SERVICES.find((s) => s.id === id)?.name).filter(Boolean).join(' · ')}
-              </p>
-            </div>
-            <button type="submit" disabled={submitting} className="btn-primary">
-              {submitting ? 'Aanvraag verzenden…' : 'Offerte aanvragen →'}
-            </button>
+        {/* Summary + submit */}
+        <div className="bg-brand-off-white rounded-lg p-4 flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <p className="text-xs text-gray-500 mb-1">Geselecteerd</p>
+            <p className="text-sm font-semibold text-gray-800">
+              {allSelected.length > 0
+                ? allSelected.map((id) => SERVICES.find((s) => s.id === id)?.name).filter(Boolean).join(' · ')
+                : 'Nog niets geselecteerd'}
+            </p>
           </div>
-        )}
-
-        {selected.size === 0 && (
-          <button type="submit" className="btn-primary">
-            Offerte aanvragen →
+          <button type="submit" disabled={submitting} className="btn-primary">
+            {submitting ? 'Aanvraag verzenden…' : 'Offerte aanvragen →'}
           </button>
-        )}
+        </div>
 
         {error && <p className="text-red-500 text-sm">{error}</p>}
       </form>
