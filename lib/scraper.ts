@@ -55,7 +55,46 @@ async function tryScraperApiJson(id: string): Promise<Record<string, unknown> | 
   return null;
 }
 
-// ── Strategy 2: HTML meta tags (limited fallback) ────────────────────────────
+// ── Strategy 3: ScraperAPI with JS rendering ─────────────────────────────────
+// Executes JavaScript, bypasses consent gates, renders full page.
+// Costs 5 credits/request but returns fully rendered HTML with all data.
+
+async function tryScraperApiRender(id: string, originalUrl: string): Promise<Record<string, unknown> | null> {
+  const cleanUrl = originalUrl.split('?')[0];
+  try {
+    const res = await axios.get('https://api.scraperapi.com/', {
+      params: { api_key: SCRAPER_KEY, url: cleanUrl, render: 'true', wait: 5000 },
+      timeout: 120_000,
+      responseType: 'arraybuffer',
+    });
+    const html = Buffer.from(res.data as ArrayBuffer).toString('utf8');
+    if (html.length < 1000) return null;
+
+    // Try to find listing data in rendered HTML via JSON variables or script tags
+    const patterns = [
+      /window\.__classifiedData\s*=\s*(\{[\s\S]+?\});/,
+      /window\.__INITIAL_STATE__\s*=\s*(\{[\s\S]+?\});/,
+      /"classified"\s*:\s*(\{[\s\S]{200,}?\})\s*[,}]/,
+    ];
+    for (const pattern of patterns) {
+      const m = html.match(pattern);
+      if (m) {
+        try {
+          const obj = JSON.parse(m[1]) as Record<string, unknown>;
+          if (obj?.id || obj?.property) { console.info('[scraper] ScraperAPI render → script var ✓'); return obj; }
+        } catch { /* continue */ }
+      }
+    }
+
+    // Fallback: use meta tags from rendered page
+    console.info('[scraper] ScraperAPI render → using meta tags');
+    return { _htmlFallback: html } as Record<string, unknown>;
+  } catch (e) {
+    console.warn('[scraper] ScraperAPI render:', e instanceof Error ? e.message : e);
+  }
+  return null;
+}
+
 
 function getMeta(html: string, attr: string, val: string): string | null {
   const m = html.match(new RegExp(`<meta[^>]+${attr}=["']${val}["'][^>]+content=["']([^"']+)["']`, 'i'))
@@ -211,7 +250,12 @@ export async function scrapeImmowebListing(url: string): Promise<ImmowebListing>
   const scraperJson = await tryScraperApiJson(id);
   if (scraperJson) return parseJsonApi(scraperJson, url, id);
 
-  // Strategy 3: HTML page via ScraperAPI (limited data — meta tags only)
+  // Strategy 3: JS rendering via ScraperAPI (full page, handles consent gate)
+  const rendered = await tryScraperApiRender(id, url);
+  if (rendered && !rendered._htmlFallback) return parseJsonApi(rendered, url, id);
+  if (rendered?._htmlFallback) return parseHtmlFallback(rendered._htmlFallback as string, url, id);
+
+  // Strategy 4: HTML page via ScraperAPI (limited data — meta tags only)
   console.warn('[scraper] Falling back to HTML meta tags');
   try {
     const res = await axios.get('https://api.scraperapi.com/', {

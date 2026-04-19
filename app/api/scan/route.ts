@@ -31,22 +31,14 @@ export async function POST(req: NextRequest) {
   const id = uuidv4();
   const encoder = new TextEncoder();
 
-  // ── SSE stream ──────────────────────────────────────────────────────────────
-  // Streaming keeps the connection alive so Vercel's 60s hobby timeout
-  // doesn't cause a "load failed" network error on the client.
   let controller!: ReadableStreamDefaultController;
-
-  const stream = new ReadableStream({
-    start(c) { controller = c; },
-  });
+  const stream = new ReadableStream({ start(c) { controller = c; } });
 
   function emit(data: object) {
-    try {
-      controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-    } catch { /* client disconnected */ }
+    try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`)); }
+    catch { /* client disconnected */ }
   }
 
-  // Run the scan asynchronously while the stream stays open
   void (async () => {
     const scan: ScanRecord = {
       id,
@@ -65,14 +57,13 @@ export async function POST(req: NextRequest) {
       const listing = await scrapeImmowebListing(url);
       scan.listing = listing;
 
-      // Step 2 — AI (photos + text in parallel; skip sequence to save time)
+      // Step 2 — AI analysis
       emit({ type: 'status', message: "Foto's en tekst analyseren met AI…" });
       scan.status = 'analyzing';
       const [photoAnalysis, textAnalysis] = await Promise.all([
         analyzePhotos(listing.photos),
         analyzeText(listing.title, listing.description),
       ]);
-      // Stub sequence analysis — avoids a third parallel image-heavy Claude call
       const sequenceAnalysis: SequenceAnalysisResult = { score: 60, logicalFlow: true, issues: [] };
 
       // Step 3 — Score
@@ -87,30 +78,42 @@ export async function POST(req: NextRequest) {
       scan.statusMessage = 'Scan voltooid.';
       saveScan(scan);
 
-      // Emit full result — client stores in sessionStorage and navigates
+      // Emit done — client navigates immediately, stream stays open for email
       emit({ type: 'done', scanId: id, scan });
 
-      // Step 4 — PDF + email (best-effort after stream closes)
-      void (async () => {
-        try {
-          const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://scan.rflct.be';
-          const pdfBuffer = await generateScanPdf(scan);
-          const html = buildResultEmailHtml({
-            name: listing.agencyName,
-            url,
-            totalScore: total,
-            workPoints: scan.workPoints!,
-            recommendation: scan.recommendation!,
-            reportUrl: `${baseUrl}/scan/${id}`,
-          });
-          await Promise.all([
-            sendMail({ to: email, subject: `Uw RFLCT Advertentie-scan — score ${total}/100`, html, pdfBuffer, pdfFilename: `rflct-scan-${id}.pdf` }),
-            sendMail({ to: process.env.RFLCT_EMAIL ?? 'info@rflct.be', subject: `Nieuwe scan: ${listing.title || url} — ${total}/100`, html, pdfBuffer, pdfFilename: `rflct-scan-${id}.pdf` }),
-          ]);
-        } catch (mailErr) {
-          console.error('PDF/mail (non-fatal):', mailErr);
-        }
-      })();
+      // Step 4 — PDF + email (awaited before closing stream — keeps function alive)
+      emit({ type: 'status', message: 'Rapport versturen per e-mail…' });
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? 'https://rflct-scan.vercel.app';
+        const pdfBuffer = await generateScanPdf(scan);
+        const html = buildResultEmailHtml({
+          name: listing.agencyName,
+          url,
+          totalScore: total,
+          workPoints: scan.workPoints!,
+          recommendation: scan.recommendation!,
+          reportUrl: `${baseUrl}/scan/${id}`,
+        });
+        await Promise.all([
+          sendMail({
+            to: email,
+            subject: `Uw RFLCT Advertentie-scan — score ${total}/100`,
+            html,
+            pdfBuffer,
+            pdfFilename: `rflct-scan-${id}.pdf`,
+          }),
+          sendMail({
+            to: process.env.RFLCT_EMAIL ?? 'info@rflct.be',
+            subject: `Nieuwe scan: ${listing.title || url} — ${total}/100`,
+            html,
+            pdfBuffer,
+            pdfFilename: `rflct-scan-${id}.pdf`,
+          }),
+        ]);
+        console.info('[scan] Email sent to', email);
+      } catch (mailErr) {
+        console.error('[scan] Email failed:', mailErr);
+      }
 
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
