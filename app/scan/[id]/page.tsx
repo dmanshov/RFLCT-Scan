@@ -182,6 +182,9 @@ export default function ScanResultPage() {
                 recommendation={scan.recommendation!}
                 scanId={id}
                 totalScore={scan.totalScore}
+                scanEmail={scan.email}
+                scanPhone={scan.phone}
+                scanUrl={scan.url}
               />
             </section>
 

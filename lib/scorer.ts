@@ -112,26 +112,20 @@ export function calculateScores(input: ScoringInput): { breakdown: ScoreBreakdow
   );
 
   // 7. Verplichte info (15 pts)
-  const needsAsbestos = true; // err on side of caution — most listings should mention it
   const renovScore = listing.compliance.hasRenovationObligation ? 5 : 3;
-  const asbestScore = listing.compliance.hasAsbestosInfo ? 5 : (needsAsbestos ? 0 : 5);
+  const asbestScore = listing.compliance.hasAsbestosInfo ? 5 : 0;
   const floodScore = listing.compliance.hasFloodRisk ? 5 : 0;
   const mandatoryScore = renovScore + asbestScore + floodScore;
 
   const mandatoryIssues: string[] = [];
   const mandatoryStrengths: string[] = [];
-  if (!listing.compliance.hasRenovationObligation) {
-    mandatoryIssues.push('Renovatieplicht niet expliciet vermeld — controleer of dit van toepassing is en vermeld dit duidelijk.');
-  } else {
-    mandatoryStrengths.push('Renovatieplicht correct behandeld.');
-  }
   if (!listing.compliance.hasAsbestosInfo) {
-    mandatoryIssues.push('Asbestattest niet vermeld — verplicht bij verkoop van woningen gebouwd vóór 2001.');
+    mandatoryIssues.push('Asbestattest niet teruggevonden in de advertentietekst.');
   } else {
     mandatoryStrengths.push('Asbestattest vermeld.');
   }
   if (!listing.compliance.hasFloodRisk) {
-    mandatoryIssues.push('Overstromingsgevoeligheid (P- en G-score) niet teruggevonden — verplicht conform Vlaamse regelgeving.');
+    mandatoryIssues.push('Overstromingsgevoeligheid (P- en G-score) niet teruggevonden.');
   } else {
     mandatoryStrengths.push('Overstromingsrisico vermeld.');
   }
@@ -197,11 +191,10 @@ export function deriveRecommendation(
 }
 
 export function buildWorkPoints(breakdown: ScoreBreakdown): string[] {
-  const points: string[] = [];
-  for (const ind of Object.values(breakdown)) {
-    for (const issue of ind.issues) {
-      points.push(issue);
-    }
-  }
-  return points;
+  // Only return issues from indicators scoring below 70%, max 5 total
+  return Object.values(breakdown)
+    .filter((ind) => ind.percentage < 70)
+    .sort((a, b) => a.percentage - b.percentage)
+    .flatMap((ind) => ind.issues.slice(0, 1))
+    .slice(0, 5);
 }

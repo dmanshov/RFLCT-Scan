@@ -59,9 +59,11 @@ function extractFromHtml(html: string, url: string, id: string): ImmowebListing 
   const postalMatch = description.match(/\b(\d{4})\b/);
   const postalCode = postalMatch?.[1] ?? '';
 
-  // EPC: check title and full HTML text for label
-  const epcLabelMatch = html.match(/\bEPC[:\s-]*([A-G][+]{0,2})\b/i)
-    ?? title.match(/\bEPC[:\s-]*([A-G][+]{0,2})\b/i);
+  // EPC: search HTML for label in various formats (meta tags, JSON properties, text)
+  const epcLabelMatch =
+    html.match(/["'](?:epcScore|energyClass|epcClass|epcLabel|label)["']\s*:\s*["']([A-G][+]{0,2})["']/i)
+    ?? html.match(/\bEPC[:\s\-–]*([A-G][+]{0,2})\b/i)
+    ?? html.match(/energielabel[:\s]*([A-G][+]{0,2})\b/i);
   const epcLabel = epcLabelMatch?.[1]?.toUpperCase() ?? null;
 
   const photos = extractPhotos(html);

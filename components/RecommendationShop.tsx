@@ -9,6 +9,9 @@ interface Props {
   recommendation: Recommendation;
   scanId: string;
   totalScore: number;
+  scanEmail: string;
+  scanPhone?: string;
+  scanUrl: string;
 }
 
 const REC_DEFAULT_PACKAGE: Record<Recommendation, string | null> = {
@@ -50,7 +53,7 @@ const REC_HEADLINE: Record<Recommendation, { title: string; body: string }> = {
   },
 };
 
-export default function RecommendationShop({ recommendation, scanId, totalScore }: Props) {
+export default function RecommendationShop({ recommendation, scanId, totalScore, scanEmail, scanPhone, scanUrl }: Props) {
   const [selectedPackage, setSelectedPackage] = useState<string | null>(REC_DEFAULT_PACKAGE[recommendation]);
   const [selectedMicros, setSelectedMicros] = useState<Set<string>>(new Set(REC_DEFAULT_MICROS[recommendation]));
   const [message, setMessage] = useState('');
@@ -86,7 +89,7 @@ export default function RecommendationShop({ recommendation, scanId, totalScore 
       const res = await fetch('/api/quote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scanId, selectedServices: allSelected, message }),
+        body: JSON.stringify({ scanId, email: scanEmail, phone: scanPhone, url: scanUrl, totalScore, selectedServices: allSelected, message }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Onbekende fout');
