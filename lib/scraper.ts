@@ -84,6 +84,44 @@ function extractPhotos(html: string): string[] {
   return ogImage ? [ogImage] : [];
 }
 
+/**
+ * Extract photos in their correct display order by reading the largeUrl fields
+ * from the embedded JSON blob. Falls back to regex if the JSON approach yields nothing.
+ * Also detects floor plans by checking for "FLOOR_PLAN" in the surrounding context.
+ */
+function extractPhotosOrdered(html: string): { photos: string[]; floorPlans: string[] } {
+  const searchable = html.replace(/\\\//g, '/');
+
+  const largeUrlRe = /"largeUrl"\s*:\s*"(https:\/\/(?:media-resize\.immowebstatic\.be|picture\.immoweb\.be)[^"]+)"/g;
+  const photos: string[] = [];
+  const floorPlans: string[] = [];
+  const seen = new Set<string>();
+  let m: RegExpExecArray | null;
+
+  while ((m = largeUrlRe.exec(searchable)) !== null) {
+    const url = m[1];
+    if (seen.has(url)) continue;
+    seen.add(url);
+    // Check ±300 chars around the match for a FLOOR_PLAN type marker
+    const ctx = searchable.slice(Math.max(0, m.index - 300), m.index + 300);
+    if (/FLOOR_PLAN/i.test(ctx)) {
+      floorPlans.push(url);
+    } else {
+      photos.push(url);
+    }
+  }
+
+  if (photos.length > 0 || floorPlans.length > 0) {
+    console.info(`[scraper] Photos from JSON blob: ${photos.length} photos, ${floorPlans.length} floor plans`);
+    return { photos, floorPlans };
+  }
+
+  // Fallback: regex extraction (order may differ from actual listing)
+  const fallback = extractPhotos(html);
+  console.info(`[scraper] Photos from regex fallback: ${fallback.length}`);
+  return { photos: fallback, floorPlans: [] };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseJsonApi(raw: any, url: string, id: string): ImmowebListing {
   const property = raw?.property ?? {};
@@ -176,7 +214,7 @@ function parseHtmlFallback(html: string, url: string, id: string): ImmowebListin
     html.match(/["'](?:epcScore|energyClass|epcLabel)["']\s*:\s*["']([A-G][+]{0,2})["']/i)
     ?? html.match(/\bEPC[:\s\-–]*([A-G][+]{0,2})\b/i);
 
-  const photos = extractPhotos(html);
+  const { photos, floorPlans } = extractPhotosOrdered(html);
   const dl = (description + ' ' + html.slice(0, 50_000)).toLowerCase();
 
   return {
@@ -189,7 +227,7 @@ function parseHtmlFallback(html: string, url: string, id: string): ImmowebListin
     city: cityMatch?.[1]?.trim() ?? '',
     postalCode: postalMatch?.[1] ?? '',
     photos,
-    floorPlans: [],
+    floorPlans,
     epcScore: null,
     epcLabel: epcLabelMatch?.[1]?.toUpperCase() ?? null,
     area: areaMatch ? parseInt(areaMatch[1]) : null,

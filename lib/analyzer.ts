@@ -162,35 +162,40 @@ export async function analyzePhotos(photoUrls: string[]): Promise<PhotoAnalysisR
           ...imageBlocks,
           {
             type: 'text',
-            text: `Je bent expert vastgoedfotograaf. Je analyseert de EERSTE ${imageBlocks.length} foto's (van ${photoUrls.length} totaal) van een Immoweb-advertentie, IN VOLGORDE (foto 1 = eerste in de advertentie, foto ${imageBlocks.length} = laatste van deze selectie).
+            text: `Je bent expert vastgoedfotograaf. Je analyseert de EERSTE ${imageBlocks.length} foto's (van ${photoUrls.length} totaal) van een Immoweb-advertentie, IN VOLGORDE (foto 1 = eerste in de advertentie).
 
-STAP 1 — Ruimte-identificatie (voor je eigen analyse, verschijnt NIET in JSON):
-Noteer intern voor elke foto het ruimtetype: exterieur/gevel, tuin/terras, hal/inkomhal, living/woonkamer, keuken, eetkamer, slaapkamer, badkamer, bureau/werkkamer, bergruimte/kelder, garage, of detail/overig.
+STAP 1 — Ruimte-identificatie (intern, verschijnt NIET in JSON):
+Noteer voor elke foto het type ruimte/element: exterieur/gevel, tuin/terras, hal/inkomhal, living/woonkamer, keuken, eetkamer, slaapkamer, badkamer, bureau, bergruimte/kelder, garage, of detail/overig.
 
-STAP 2 — Technische kwaliteit (beoordeel alle ${imageBlocks.length} foto's samen):
+STAP 2 — Technische kwaliteit en presentatie (beoordeel alle ${imageBlocks.length} foto's samen):
 Gebruik UITSLUITEND 0, 1, 2 of 3.
-| Aspect       | 0 = onvoldoende         | 1 = matig               | 2 = goed               | 3 = uitstekend          |
-|--------------|-------------------------|-------------------------|------------------------|-------------------------|
-| belichting   | Donker of overbelicht   | Merkbaar te licht/donker| Grotendeels correct    | Perfect belicht         |
-| perspectief  | Scheef, slechte crop    | Enigszins scheef        | Rechte lijnen, goed    | Professioneel hoek      |
-| witbalans    | Sterke kleurzweem       | Lichte kleurzweem       | Naturale kleuren       | Perfecte witbalans      |
-| scherpte     | Wazig of onscherp       | Deels onscherp          | Grotendeels scherp     | Pixel-scherp            |
-| consistentie | Sterk wisselende stijl  | Enige inconsistentie    | Grotendeels coherent   | Uniforme presentatie    |
 
-STAP 3 — Narratieve volgorde (gebaseerd op ruimte-identificatie uit Stap 1):
+| Aspect        | 0 = onvoldoende                                                    | 1 = matig                                      | 2 = goed                        | 3 = uitstekend                         |
+|---------------|--------------------------------------------------------------------|------------------------------------------------|---------------------------------|----------------------------------------|
+| belichting    | Uitgebrande ramen, donkere kamers, lampen niet aan overdag         | Zichtbare maar milde belichtingsproblemen      | Grotendeels correct belicht     | Perfect — lampen aan, geen uitbranding |
+| perspectief   | Sterk scheef, deuren nemen >40% van frame in, kromlijnig           | Enigszins scheef of slecht kadrage             | Rechte lijnen, goed kadrage     | Professioneel hoek, ruimtelijk gevoel  |
+| witbalans     | Sterke kleurzweem (geel/blauw/oranje)                              | Lichte kleurzweem                              | Naturale kleuren                | Perfecte witbalans                     |
+| scherpte      | Wazig, bewogen of onscherp                                         | Deels onscherp                                 | Grotendeels scherp              | Pixel-scherp                           |
+| presentatie   | Rommel, gekreukt beddengoed, persoonlijke items, onopgeruimd       | 1–2 storende elementen (kussen scheef, glas)   | Grotendeels netjes en gestileerd| Opgeruimd, gestileerd, professioneel   |
+
+Let specifiek op: uitgebrande ramen (blown-out), lampen die niet branden, gekreukt beddengoed, deuren die het ruimtegevoel blokkeren, scheefstaande meubels of lijnen, persoonlijke spullen (foto's, kleding), rommel op aanrechten of tafels.
+
+STAP 3 — Narratieve volgorde (gebaseerd op Stap 1):
 Ideale volgorde: exterieur/gevel → hal → living/woonkamer → keuken/eetkamer → slaapkamers → badkamer(s) → tuin/terras → garage/kelder
 
-Kies EXACT één waarde:
+Kies EXACT één waarde — wees NIET te streng:
 - 10 = Volgt ideale volgorde volledig, exterieur als openingsfoto
-- 7 = Logisch maar niet volledig (ontbrekende ruimte in selectie of geen exterieur als opening)
-- 4 = Gedeeltelijk logisch, merkbare volgorde-fouten
-- 1 = Één duidelijke volgorde-fout (bijv. woonkamer vóór exterieur)
-- 0 = Chaotisch, geen logische structuur
+- 7 = Grotendeels logisch (kleine afwijking of exterieur niet als allereerste foto)
+- 4 = Gedeeltelijk logisch — kies dit OOK bij twijfel of beperkte zichtbaarheid
+- 1 = Één duidelijke volgorde-fout die storend is
+- 0 = Chaotisch, totaal geen logische structuur — enkel bij overduidelijke wanorde
 
-BELANGRIJK voor issues/strengths:
-- Vermeld ALLEEN technische kwaliteitsproblemen of concrete volgorde-fouten (bijv. "Keuken verschijnt vóór woonkamer")
-- Meld NOOIT ontbrekende ruimtetypes — je ziet slechts ${imageBlocks.length} van ${photoUrls.length} foto's, de andere ruimtes kunnen in de overige foto's staan
-- Max 3 issues, max 2 strengths — elk concreet en max 1 zin
+Bij twijfel: kies altijd de hogere score (4 in plaats van 1, 7 in plaats van 4).
+
+REGELS voor issues/strengths:
+- Vermeld ALLEEN concrete kwaliteits- of presentatie-problemen (uitgebrande ramen, gekreukt beddengoed, lampen uit, rommel, scheefstaand perspectief, deuren die kader domineren) of concrete volgorde-fouten ("Keuken verschijnt vóór woonkamer")
+- Meld NOOIT ontbrekende ruimtetypes — je ziet slechts ${imageBlocks.length} van ${photoUrls.length} foto's
+- Max 3 issues, max 2 strengths — concreet en max 1 zin elk
 
 Geef ENKEL JSON terug:
 {
@@ -203,7 +208,7 @@ Geef ENKEL JSON terug:
   "openingsFoto": "beschrijving van wat de eerste foto toont",
   "eersteZwakkePositie": null of 0-gebaseerde index van eerste volgorde-fout,
   "logicalFlow": true/false,
-  "issues": ["concrete kwaliteits- of volgorde-tekortkoming"],
+  "issues": ["concreet probleem"],
   "strengths": ["concrete sterkte"]
 }`,
           },
