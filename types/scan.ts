@@ -1,7 +1,10 @@
 export type ScanStatus = 'pending' | 'scraping' | 'analyzing' | 'scoring' | 'done' | 'error';
 
-export type Recommendation = 'PRODUCTIE' | 'BASIS' | 'ONLINE' | 'MICRO' | 'PERFECT';
+// RFLCT Online | Productie | Basis | Compleet | MICRO = losse micro-dienst(en), geen pakket
+export type Recommendation = 'ONLINE' | 'PRODUCTIE' | 'BASIS' | 'COMPLEET' | 'MICRO';
+export type Verdict = 'good' | 'average' | 'poor';
 
+// ─── Listing ───────────────────────────────────────────────────────────────
 export interface ImmowebListing {
   id: string;
   url: string;
@@ -22,11 +25,7 @@ export interface ImmowebListing {
   agencyName: string | null;
   agencyPhone: string | null;
   agencyEmail: string | null;
-  stats: {
-    daysOnline: number | null;
-    views: number | null;
-    saves: number | null;
-  };
+  stats: { daysOnline: number | null; views: number | null; saves: number | null };
   compliance: {
     hasRenovationObligation: boolean;
     hasAsbestosInfo: boolean;
@@ -35,28 +34,44 @@ export interface ImmowebListing {
   };
 }
 
-export interface ScoreIndicator {
+// ─── Score structure ───────────────────────────────────────────────────────
+export interface SubScore {
   key: string;
   label: string;
-  score: number;
-  maxScore: number;
-  percentage: number;
+  score: number;      // punten behaald (op rawMax-schaal)
+  maxScore: number;   // raw gewicht per spec
+  notApplicable: boolean;
+  naReason?: string;
   issues: string[];
   strengths: string[];
-  verdict: 'good' | 'average' | 'poor';
+}
+
+export interface DimensionScore {
+  key: string;       // 'dim1' … 'dim5'
+  label: string;
+  score: number;     // behaald op dimMax-schaal (na dynamische weging)
+  maxScore: number;  // dimensie-totaal: 35/15/20/20/10
+  percentage: number;
+  verdict: Verdict;
+  subScores: SubScore[];
 }
 
 export interface ScoreBreakdown {
-  photoCount: ScoreIndicator;
-  photoQuality: ScoreIndicator;
-  floorPlans: ScoreIndicator;
-  epcCompliance: ScoreIndicator;
-  listingText: ScoreIndicator;
-  photoSequence: ScoreIndicator;
-  mandatoryInfo: ScoreIndicator;
-  contactInfo: ScoreIndicator;
+  dim1: DimensionScore;  // Visuele presentatie (35)
+  dim2: DimensionScore;  // Ruimtelijk inzicht (15)
+  dim3: DimensionScore;  // Advertentietekst (20)
+  dim4: DimensionScore;  // Wettelijk verplichte vermeldingen (20)
+  dim5: DimensionScore;  // Contact & conversie (10)
 }
 
+// ─── Report content ────────────────────────────────────────────────────────
+export interface KernBevinding {
+  wat: string;
+  impact: string;
+  strategischeLezing: string;
+}
+
+// ─── Scan record ───────────────────────────────────────────────────────────
 export interface ScanRecord {
   id: string;
   createdAt: string;
@@ -69,103 +84,131 @@ export interface ScanRecord {
   scores?: ScoreBreakdown;
   totalScore?: number;
   recommendation?: Recommendation;
-  workPoints?: string[];
+  recommendationWhy?: string;
+  recommendedMicros?: string[];  // max 3 micro-service ids
+  kernbevindingen?: KernBevinding[];
+  interpretatieText?: string;
+  workPoints?: string[];  // voor e-mail backward compat
   pdfSent?: boolean;
   error?: string;
 }
 
-export interface ServiceOption {
-  id: string;
-  category: 'package' | 'micro';
-  name: string;
-  description: string;
+// ─── Services ──────────────────────────────────────────────────────────────
+export interface Package {
+  id: 'online' | 'productie' | 'basis' | 'compleet';
+  name: string;   // exacte naam: "RFLCT Online" etc.
+  price: number;
+  kernpositionering: string;
   tags: string[];
-  recommended?: boolean;
 }
 
-export const SERVICES: ServiceOption[] = [
+export interface MicroService {
+  id: string;
+  name: string;
+  price: number;
+  description: string;
+}
+
+export const PACKAGES: Package[] = [
+  {
+    id: 'online',
+    name: 'RFLCT Online',
+    price: 395,
+    kernpositionering: 'Zichtbaar op jouw kanalen. AI-retouche van bestaande foto\'s + RFLCT-webpagina + social + Meta-campagne 7d. Geen coaching, geen fotograaf, geen Immoweb-publicatie.',
+    tags: ['AI-fotoretouche', 'RFLCT-webpagina', 'Social media', 'Meta-campagne 7d'],
+  },
   {
     id: 'productie',
-    category: 'package',
-    name: 'Productie Pakket',
-    description: 'Volledige professionele presentatie van uw woning: fotoreportage, isometrisch 3D-grondplan, advertentietekst en EPC-visualisatie.',
-    tags: ['Fotoreportage', '3D Grondplan', 'Advertentietekst', 'EPC-visualisatie'],
+    name: 'RFLCT Productie',
+    price: 1495,
+    kernpositionering: 'Professionele presentatie, zelf aan het roer. Pro-fotografie ter plaatse + 2D-grondplan + RFLCT-webpagina + Premium Immoweb 1m + social + Meta 7d. Geen coaching.',
+    tags: ['Pro-fotografie', '2D-grondplan', 'RFLCT-webpagina', 'Premium Immoweb 1m'],
   },
   {
     id: 'basis',
-    category: 'package',
-    name: 'Basis Pakket',
-    description: 'Professionele fotoreportage en een herschreven advertentietekst om uw presentatie snel te verbeteren.',
-    tags: ['Fotoreportage', 'Advertentietekst'],
+    name: 'RFLCT Basis',
+    price: 2850,
+    kernpositionering: 'Begeleiding waar het nodig is. Volledige coaching tot lancering: intake, verkoopplan, prijsadvies, attestbegeleiding, pro-fotografie, 2D+3D grondplan, Premium Immoweb 1m, social, webpagina, gevelbord.',
+    tags: ['Volledig coaching', '2D+3D grondplan', 'Pro-fotografie', 'Premium Immoweb 1m'],
   },
   {
-    id: 'online',
-    category: 'package',
-    name: 'Online Pakket',
-    description: 'Optimaliseer uw online zichtbaarheid via gerichte publicatie-aanpak en sociale media promotie.',
-    tags: ['Publicatie-optimalisatie', 'Social media promotie'],
-  },
-  {
-    id: 'micro-foto',
-    category: 'micro',
-    name: 'Digitale foto retouche',
-    description: 'Professionele nabewerking van max. 15 bestaande foto\'s: belichting, witbalans en perspectief gecorrigeerd.',
-    tags: ['Max. 15 beelden', 'Belichting', 'Kleurcorrectie'],
-  },
-  {
-    id: 'micro-plan3d',
-    category: 'micro',
-    name: 'Isometrisch 3D-grondplan',
-    description: 'Fotorealistisch isometrisch 3D-grondplan dat kopers helpt de ruimte te visualiseren.',
-    tags: ['3D Visualisatie', 'Isometrisch'],
-  },
-  {
-    id: 'micro-styling',
-    category: 'micro',
-    name: 'Virtual styling / 3D-inrichting',
-    description: 'Virtuele 3D-inrichting per ruimte — ideaal om lege of verouderde ruimtes aantrekkelijk voor te stellen.',
-    tags: ['Per ruimte', 'Virtual staging'],
-  },
-  {
-    id: 'micro-webpagina',
-    category: 'micro',
-    name: 'Persoonlijke RFLCT-webpagina',
-    description: 'Een eigen landingspagina voor uw woning op het RFLCT-platform, los van Immoweb.',
-    tags: ['Eigen pagina', 'RFLCT-platform'],
-  },
-  {
-    id: 'micro-social',
-    category: 'micro',
-    name: 'Social-media-vermelding',
-    description: 'Professionele post + reel van uw woning op onze sociale media kanalen.',
-    tags: ['Post + Reel', 'Social media'],
-  },
-  {
-    id: 'micro-meta',
-    category: 'micro',
-    name: 'Meta-advertentiecampagne',
-    description: '1 week gerichte Meta-advertentiecampagne (Facebook/Instagram), excl. mediabudget.',
-    tags: ['1 week', 'Facebook & Instagram'],
-  },
-  {
-    id: 'micro-premium',
-    category: 'micro',
-    name: 'Premium Immoweb (1 maand)',
-    description: 'Upgrade van uw advertentie naar Premium-zichtbaarheid op Immoweb gedurende 1 maand, zonder coaching.',
-    tags: ['1 maand', 'Premium zichtbaarheid'],
-  },
-  {
-    id: 'micro-verlenging',
-    category: 'micro',
-    name: 'Verlenging advertenties (1 maand)',
-    description: 'Verlenging van uw bestaande advertenties op alle platformen met 1 extra maand.',
-    tags: ['1 maand verlenging'],
-  },
-  {
-    id: 'micro-gevelbord',
-    category: 'micro',
-    name: 'Gevelbord',
-    description: 'Professioneel RFLCT-gevelbord op maat, geplaatst voor uw woning.',
-    tags: ['Ter plaatse', 'Zichtbaarheid'],
+    id: 'compleet',
+    name: 'RFLCT Compleet',
+    price: 3650,
+    kernpositionering: 'Van strategie tot bod. Alles uit Basis + verkoopdossier + bezoekvoorbereiding + bodanalyse + verlenging advertenties.',
+    tags: ['Alles uit Basis', 'Verkoopdossier', 'Bezoekvoorbereiding', 'Bodanalyse'],
   },
 ];
+
+export const MICRO_SERVICES: MicroService[] = [
+  {
+    id: 'ai-retouche',
+    name: 'AI-fotoretouche (max. 15 beelden)',
+    price: 149,
+    description: 'Professionele nabewerking van max. 15 beelden: belichting, witbalans en perspectief gecorrigeerd. Enkel cosmetische correctie — geen meubels toegevoegd of gebreken gemaskeerd.',
+  },
+  {
+    id: '2d-schets',
+    name: '2D-grondplan op basis van klantschets + opmeting',
+    price: 199,
+    description: 'Grondplan per verdieping op basis van jouw schets of bouwplannen + afmetingen.',
+  },
+  {
+    id: '2d-opmeting',
+    name: '2D-grondplan met professionele opmeting ter plaatse',
+    price: 345,
+    description: 'Grondplan per verdieping na opmeting door onze partner — geen plannen of afmetingen vereist.',
+  },
+  {
+    id: '3d-upgrade',
+    name: 'Upgrade naar isometrisch 3D-grondplan',
+    price: 195,
+    description: 'Isometrisch 3D-grondplan op basis van het 2D-plan — maximaal inlevingsvermogen voor kandidaat-kopers.',
+  },
+  {
+    id: 'virtual-styling',
+    name: 'Virtual styling / 3D-inrichting per ruimte',
+    price: 195,
+    description: 'Virtuele 3D-inrichting van lege of gedateerde ruimtes voor aantrekkelijkere foto\'s.',
+  },
+  {
+    id: 'webpagina',
+    name: 'Persoonlijke RFLCT-webpagina (los)',
+    price: 395,
+    description: 'Eigen landingspagina voor jouw woning op het RFLCT-platform, deelbaar buiten Immoweb.',
+  },
+  {
+    id: 'social',
+    name: 'Social-media-vermelding (post + reel)',
+    price: 145,
+    description: 'Professionele post + reel van jouw woning op onze sociale media kanalen.',
+  },
+  {
+    id: 'meta',
+    name: 'Meta-advertentiecampagne (1 week)',
+    price: 195,
+    description: 'Gerichte Facebook/Instagram-campagne van 1 week, exclusief mediabudget.',
+  },
+  {
+    id: 'premium-immoweb',
+    name: 'Premium Immoweb 1 maand (zonder coaching)',
+    price: 395,
+    description: 'Upgrade naar Premium-zichtbaarheid op Immoweb gedurende 1 maand.',
+  },
+  {
+    id: 'verlenging',
+    name: 'Verlenging advertenties (1 maand)',
+    price: 295,
+    description: 'Verlenging van bestaande advertenties op alle platformen met 1 extra maand.',
+  },
+  {
+    id: 'gevelbord',
+    name: 'Gevelbord',
+    price: 95,
+    description: 'Professioneel RFLCT-gevelbord geplaatst aan jouw woning voor lokale zichtbaarheid.',
+  },
+];
+
+// Backward compat alias — te verwijderen na volledige migratie UI
+export type ServiceOption = Package | MicroService;
+export const SERVICES: ServiceOption[] = [...PACKAGES, ...MICRO_SERVICES];
