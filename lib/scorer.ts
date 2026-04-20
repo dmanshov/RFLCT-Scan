@@ -106,13 +106,15 @@ function scoreDim2(listing: ImmowebListing): DimensionScore {
 
   // Sub 2.1 — 2D grondplan (max 8)
   const s21 = sub('grondplan-2d', '2D-grondplan', hasFloorPlan ? 5 : 0, 8,
-    !hasFloorPlan ? ['Geen 2D-grondplan gedetecteerd — kopers kunnen de indeling niet beoordelen.'] : [],
+    !hasFloorPlan ? ['Geen grondplan beschikbaar — voeg een 2D-grondplan toe per verdieping; een isometrisch 3D-plan differentieert verder van concurrenten.'] : [],
     hasFloorPlan ? ['Grondplan aanwezig.'] : [],
   );
 
   // Sub 2.2 — 3D grondplan (max 7) — scraper kan dit niet onderscheiden, altijd 0
+  // Issues worden niet hier gerapporteerd om duplicaten in werkpunten te vermijden;
+  // de 3D-aanbeveling zit vervat in de s21-issue en de kernbevinding 'grondplan'.
   const s22 = sub('grondplan-3d', '3D-grondplan (isometrisch)', 0, 7,
-    ['3D-grondplan niet gedetecteerd — isometrisch 3D-plan verhoogt de beleving voor kandidaat-kopers.'],
+    [],
     [],
   );
 
@@ -500,7 +502,12 @@ export function deriveRecommendation(
 export function buildWorkPoints(breakdown: ScoreBreakdown): string[] {
   return Object.values(breakdown)
     .flatMap((dim) => dim.subScores)
-    .filter((s) => !s.notApplicable && s.issues.length > 0 && s.score / s.maxScore < 1)
+    .filter((s) =>
+      !s.notApplicable &&
+      s.issues.length > 0 &&
+      s.score / s.maxScore < 1 &&
+      s.key !== 'grondplan-3d',   // 3D covered by grondplan-2d combined issue
+    )
     .sort((a, b) => (a.score / a.maxScore) - (b.score / b.maxScore))
     .flatMap((s) => s.issues.slice(0, 1))
     .slice(0, 5);

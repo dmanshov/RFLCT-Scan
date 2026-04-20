@@ -155,6 +155,7 @@ export async function analyzePhotos(photoUrls: string[]): Promise<PhotoAnalysisR
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1400,
+    temperature: 0,
     messages: [
       {
         role: 'user',
@@ -274,6 +275,7 @@ export async function analyzeText(title: string, description: string): Promise<T
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 1200,
+    temperature: 0,
     messages: [
       {
         role: 'user',
