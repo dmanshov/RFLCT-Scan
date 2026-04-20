@@ -438,7 +438,7 @@ export function calculateScores(input: ScoringInput): {
   };
 }
 
-// ─── Recommendation (6-staps beslisboom) ─────────────────────────────────
+// ─── Recommendation (beslisboom — alleen ONLINE, PRODUCTIE of MICRO) ────────
 
 export function deriveRecommendation(
   total: number,
@@ -449,13 +449,15 @@ export function deriveRecommendation(
   const d3 = breakdown.dim3.percentage;
   const d4 = breakdown.dim4.percentage;
 
+  // Fundamentele visuele + tekst/compliance-problemen tegelijk
   if (d1 < 30 && (d3 < 50 || d4 < 50)) {
     return {
-      recommendation: 'COMPLEET',
-      recommendationWhy: 'Fundamentele tekortkomingen op visueel, tekstueel en wettelijk vlak tegelijk — een geïntegreerde aanpak van strategie tot bod is de meest efficiënte weg vooruit.',
+      recommendation: 'PRODUCTIE',
+      recommendationWhy: 'Tekortkomingen op meerdere vlakken tegelijk. Professionele fotografie, virtual staging en grondplan zijn de meest impactvolle ingrepen om de advertentie naar een competitief niveau te tillen.',
       recommendedMicros: [],
     };
   }
+  // Zwakke visuele presentatie
   if (d1 < 50) {
     return {
       recommendation: 'PRODUCTIE',
@@ -463,20 +465,23 @@ export function deriveRecommendation(
       recommendedMicros: [],
     };
   }
+  // Onvolledige wettelijke vermeldingen
   if (d4 < 50) {
     return {
-      recommendation: 'BASIS',
-      recommendationWhy: 'Compliance-risico\'s op wettelijke vermeldingen vragen om begeleide aanpak — coaching zorgt voor een correcte en volledige advertentie.',
+      recommendation: 'PRODUCTIE',
+      recommendationWhy: 'Wettelijke vermeldingen zijn onvolledig. RFLCT Productie zorgt voor een volledige heraanpak van de presentatie en dicht tegelijk de compliance-lacunes.',
       recommendedMicros: [],
     };
   }
+  // Zwakke advertentietekst
   if (d3 < 45) {
     return {
-      recommendation: 'BASIS',
-      recommendationWhy: 'De advertentietekst is te zwak om kopers te overtuigen — coaching en herschrijf leveren direct resultaat.',
+      recommendation: 'PRODUCTIE',
+      recommendationWhy: 'De advertentietekst overtuigt onvoldoende. RFLCT Productie tilt de volledige presentatie naar professioneel niveau en compenseert de tekstuele zwaktes met sterke visuals.',
       recommendedMicros: [],
     };
   }
+  // Solide advertentie — gerichte losse diensten volstaan
   if (total >= 65) {
     const micros = selectMicroServices(breakdown);
     return {
