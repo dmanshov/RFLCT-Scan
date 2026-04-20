@@ -273,15 +273,10 @@ const KERN: Record<string, KernBevinding> = {
     impact: "Kopers missen de emotionele doorwandeling van de woning, wat de betrokkenheid en urgentie vermindert.",
     strategischeLezing: "Gevel → woonkamer → keuken → slaapkamers → buiten: een logische volgorde vergroot de beleving.",
   },
-  'grondplan-2d': {
-    wat: 'Geen 2D-grondplan beschikbaar',
-    impact: "Zonder grondplan kunnen rationele kopers de ruimtelijke indeling niet beoordelen — een harde drempel.",
-    strategischeLezing: "Zelfs een schematisch 2D-plan overbrugt de onzekerheid en verhoogt de bezichtigingsratio.",
-  },
-  'grondplan-3d': {
-    wat: 'Geen 3D-grondplan beschikbaar',
-    impact: "Een isometrisch 3D-plan differentieert uw advertentie van concurrenten en versterkt de emotionele betrokkenheid.",
-    strategischeLezing: "Een 3D-plan is een relatief kleine investering met meetbaar effect op de bezichtigingsratio.",
+  'grondplan': {
+    wat: 'Geen grondplan beschikbaar',
+    impact: "Zonder grondplan kunnen rationele kopers de ruimtelijke indeling niet beoordelen — een harde drempel die de bezichtigingsratio drukt.",
+    strategischeLezing: "Een 2D-grondplan overbrugt de onzekerheid direct; een isometrisch 3D-plan differentieert uw advertentie verder van concurrenten.",
   },
   'structuur-volledigheid': {
     wat: 'Advertentietekst mist essentiële informatie',
@@ -347,9 +342,19 @@ function buildKernbevindingen(breakdown: ScoreBreakdown): KernBevinding[] {
   for (const dim of Object.values(breakdown)) {
     for (const s of dim.subScores) {
       if (!s.notApplicable && s.maxScore > 0) {
+        // grondplan-2d and grondplan-3d are merged into one grondplan candidate below
+        if (s.key === 'grondplan-2d' || s.key === 'grondplan-3d') continue;
         candidates.push({ key: s.key, pct: Math.round((s.score / s.maxScore) * 100) });
       }
     }
+  }
+
+  // Single combined grondplan candidate (worst of 2D/3D determines priority)
+  const g2d = breakdown.dim2.subScores.find((s) => s.key === 'grondplan-2d');
+  const g3d = breakdown.dim2.subScores.find((s) => s.key === 'grondplan-3d');
+  if (g2d && g3d) {
+    const combinedPct = Math.round(((g2d.score + g3d.score) / (g2d.maxScore + g3d.maxScore)) * 100);
+    candidates.push({ key: 'grondplan', pct: combinedPct });
   }
 
   return candidates
@@ -399,8 +404,7 @@ function selectMicroServices(breakdown: ScoreBreakdown): string[] {
   const contact  = breakdown.dim5;
 
   if (fotoKwal && fotoKwal.score / fotoKwal.maxScore < 0.67) micros.push('ai-retouche');
-  if (grond2d  && grond2d.score  === 0)                       micros.push('2d-schets');
-  else if (grond3d && grond3d.score === 0)                    micros.push('3d-upgrade');
+  if ((grond2d && grond2d.score === 0) || (grond3d && grond3d.score === 0)) micros.push('grondplannen');
   if (contact.percentage < 70)                                micros.push('premium-immoweb');
   if (micros.length < 3)                                      micros.push('social');
   if (micros.length < 3)                                      micros.push('meta');

@@ -149,22 +149,10 @@ export const MICRO_SERVICES: MicroService[] = [
     description: 'Professionele nabewerking van max. 15 beelden: belichting, witbalans en perspectief gecorrigeerd. Enkel cosmetische correctie — geen meubels toegevoegd of gebreken gemaskeerd.',
   },
   {
-    id: '2d-schets',
-    name: '2D-grondplan op basis van klantschets + opmeting',
+    id: 'grondplannen',
+    name: 'Grondplannen (2D + optioneel 3D)',
     price: 199,
-    description: 'Grondplan per verdieping op basis van jouw schets of bouwplannen + afmetingen.',
-  },
-  {
-    id: '2d-opmeting',
-    name: '2D-grondplan met professionele opmeting ter plaatse',
-    price: 345,
-    description: 'Grondplan per verdieping na opmeting door onze partner — geen plannen of afmetingen vereist.',
-  },
-  {
-    id: '3d-upgrade',
-    name: 'Upgrade naar isometrisch 3D-grondplan',
-    price: 195,
-    description: 'Isometrisch 3D-grondplan op basis van het 2D-plan — maximaal inlevingsvermogen voor kandidaat-kopers.',
+    description: '2D-grondplan per verdieping op basis van uw schets of bouwplannen; optionele upgrade naar isometrisch 3D-plan voor maximaal inlevingsvermogen.',
   },
   {
     id: 'virtual-styling',
