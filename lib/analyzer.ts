@@ -170,15 +170,24 @@ Noteer voor elke foto het type ruimte/element: exterieur/gevel, tuin/terras, hal
 STAP 2 — Technische kwaliteit en presentatie (beoordeel alle ${imageBlocks.length} foto's samen):
 Gebruik UITSLUITEND 0, 1, 2 of 3.
 
+HOOGSTE PRIORITEIT — deze twee aspecten wegen het zwaarst en moeten in issues ALTIJD als eerste worden vermeld:
+
+| Aspect                        | 0 = onvoldoende                                                                                      | 1 = matig                                           | 2 = goed                                         | 3 = uitstekend                                     |
+|-------------------------------|------------------------------------------------------------------------------------------------------|-----------------------------------------------------|--------------------------------------------------|----------------------------------------------------|
+| belichting ⚡ (PRIORITEIT)    | Uitgebrande ramen/hemel, donkere kamers, lampen niet aan overdag, harde schaduwzones                 | Zichtbare maar milde belichtingsproblemen            | Grotendeels correct belicht, meeste lampen aan   | Perfect — alle lampen aan, geen uitbranding/schaduwen |
+| perspectief/compositie ⚡ (PRIORITEIT) | Sterk scheeve of gekantelde horizont, deuren nemen >40% van frame in, kromlijnige muren, wanden niet verticaal | Enigszins scheef, 1 deur in frame, lichte vertekening | Rechte horizontale en verticale lijnen, goede kadrage | Professioneel hoek, ruimtelijk gevoel, perfecte rechte lijnen |
+
+TWEEDE PRIORITEIT:
+
 | Aspect        | 0 = onvoldoende                                                    | 1 = matig                                      | 2 = goed                        | 3 = uitstekend                         |
 |---------------|--------------------------------------------------------------------|------------------------------------------------|---------------------------------|----------------------------------------|
-| belichting    | Uitgebrande ramen, donkere kamers, lampen niet aan overdag         | Zichtbare maar milde belichtingsproblemen      | Grotendeels correct belicht     | Perfect — lampen aan, geen uitbranding |
-| perspectief   | Sterk scheef, deuren nemen >40% van frame in, kromlijnig           | Enigszins scheef of slecht kadrage             | Rechte lijnen, goed kadrage     | Professioneel hoek, ruimtelijk gevoel  |
 | witbalans     | Sterke kleurzweem (geel/blauw/oranje)                              | Lichte kleurzweem                              | Naturale kleuren                | Perfecte witbalans                     |
 | scherpte      | Wazig, bewogen of onscherp                                         | Deels onscherp                                 | Grotendeels scherp              | Pixel-scherp                           |
 | presentatie   | Rommel, gekreukt beddengoed, persoonlijke items, onopgeruimd       | 1–2 storende elementen (kussen scheef, glas)   | Grotendeels netjes en gestileerd| Opgeruimd, gestileerd, professioneel   |
 
-Let specifiek op: uitgebrande ramen (blown-out), lampen die niet branden, gekreukt beddengoed, deuren die het ruimtegevoel blokkeren, scheefstaande meubels of lijnen, persoonlijke spullen (foto's, kleding), rommel op aanrechten of tafels.
+Beoordeel perspectief/compositie streng op: horizontale lijnen (vloer, plafond, raamkozijnen) die recht moeten zijn; verticale lijnen (muren, deuren, hoekpijlers) die niet mogen hellend zijn; deuren die open staan en het frame domineren of de ruimte blokkeren; fish-eye of tonvormige vervorming.
+
+VOLGORDE VAN ISSUES: vermeld belichting/verlichting-problemen ALTIJD EERST, dan perspectief/compositie-problemen, daarna presentatie/overige. Max 3 issues totaal.
 
 STAP 3 — Narratieve volgorde (gebaseerd op Stap 1):
 Ideale volgorde: exterieur/gevel → hal → living/woonkamer → keuken/eetkamer → slaapkamers → badkamer(s) → tuin/terras → garage/kelder

@@ -82,8 +82,12 @@ function scoreDim1(listing: ImmowebListing, photo: PhotoAnalysisResult): Dimensi
     n >= 20 ? [`${n} foto's — uitstekend.`] : n >= 15 ? [`${n} foto's — goed.`] : [],
   );
 
-  // Sub 1.2 — Fotokwaliteit (max 15) — direct van qualityTotal
-  const s12 = sub('foto-kwaliteit', 'Fotokwaliteit', photo.qualityTotal, 15,
+  // Sub 1.2 — Fotokwaliteit (max 15) — weighted: belichting×2 + perspectief×2 + rest×1
+  const weightedQuality = (photo.belichting * 2) + (photo.perspectief * 2) +
+    photo.witbalans + photo.scherpte + photo.consistentie;
+  const maxWeightedQuality = 3 * 2 + 3 * 2 + 3 + 3 + 3; // = 21
+  const qualityScore = Math.round((weightedQuality / maxWeightedQuality) * 15);
+  const s12 = sub('foto-kwaliteit', 'Fotokwaliteit', qualityScore, 15,
     photo.issues,
     photo.strengths,
   );
