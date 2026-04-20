@@ -129,8 +129,8 @@ export const PACKAGES: Package[] = [
     id: 'basis',
     name: 'RFLCT Basis',
     price: 2850,
-    kernpositionering: 'Begeleiding waar het nodig is. Persoonlijke coach tot lancering: intake, verkoopplan, prijsadvies, attestbegeleiding, professionele fotografie, virtual staging, 2D+3D grondplan, Premium Immoweb 1m, social, webpagina, gevelbord.',
-    tags: ['Persoonlijke coach', 'Professionele fotografie', 'Virtual staging', '2D+3D grondplan'],
+    kernpositionering: 'Begeleiding waar het nodig is. Persoonlijke coach tot lancering: intake, verkoopplan, prijsadvies, attestbegeleiding, professionele fotografie, virtual staging, grondplannen, Premium Immoweb 1m, social, webpagina, gevelbord.',
+    tags: ['Persoonlijke coach', 'Professionele fotografie', 'Virtual staging', 'grondplannen'],
   },
   {
     id: 'compleet',
