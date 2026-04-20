@@ -115,7 +115,7 @@ export const PACKAGES: Package[] = [
     id: 'online',
     name: 'RFLCT Online',
     price: 395,
-    kernpositionering: 'Zichtbaar op jouw kanalen. AI-retouche van bestaande foto\'s + RFLCT-webpagina + social + Meta-campagne 7d. Geen coaching, geen fotograaf, geen Immoweb-publicatie.',
+    kernpositionering: 'Boost je zichtbaarheid. AI-retouche van bestaande foto\'s + RFLCT-webpagina + social + Meta-campagne 7d. Geen coaching, geen fotograaf, geen Immoweb-publicatie.',
     tags: ['AI-fotoretouche', 'RFLCT-webpagina', 'Social media', 'Meta-campagne 7d'],
   },
   {
