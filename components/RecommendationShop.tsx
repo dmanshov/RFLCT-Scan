@@ -2,11 +2,12 @@
 
 import { useState } from 'react';
 import clsx from 'clsx';
-import { SERVICES } from '@/types/scan';
+import { PACKAGES, MICRO_SERVICES, SERVICES } from '@/types/scan';
 import type { Recommendation } from '@/types/scan';
 
 interface Props {
   recommendation: Recommendation;
+  recommendedMicros: string[];
   scanId: string;
   totalScore: number;
   scanEmail: string;
@@ -15,67 +16,57 @@ interface Props {
 }
 
 const REC_DEFAULT_PACKAGE: Record<Recommendation, string | null> = {
+  COMPLEET:  'compleet',
   PRODUCTIE: 'productie',
-  BASIS: 'basis',
-  ONLINE: 'online',
-  MICRO: null,
-  PERFECT: null,
-};
-
-const REC_DEFAULT_MICROS: Record<Recommendation, string[]> = {
-  PRODUCTIE: [],
-  BASIS: [],
-  ONLINE: [],
-  MICRO: ['micro-foto', 'micro-tekst'],
-  PERFECT: [],
+  BASIS:     'basis',
+  ONLINE:    'online',
+  MICRO:     null,
 };
 
 const REC_HEADLINE: Record<Recommendation, { title: string; body: string }> = {
+  COMPLEET: {
+    title: 'RFLCT Compleet aanbevolen',
+    body: 'Fundamentele tekortkomingen op meerdere vlakken vragen om een geïntegreerde aanpak — van strategie en fotografie tot begeleiding bij biedingen.',
+  },
   PRODUCTIE: {
-    title: 'Productie Pakket aanbevolen',
-    body: 'Uw advertentie mist essentiële elementen. Een volledige productieopdracht brengt uw presentatie direct naar het hoogste niveau en verkort de verkooptijd.',
+    title: 'RFLCT Productie aanbevolen',
+    body: 'De visuele presentatie is de cruciale bottleneck. Professionele fotografie, grondplan en Premium Immoweb-zichtbaarheid leveren de grootste return op investering.',
   },
   BASIS: {
-    title: 'Basis Pakket aanbevolen',
-    body: "Met gerichte verbeteringen aan foto's en tekst pakt u de voornaamste zwakke punten aan zonder grote investering.",
+    title: 'RFLCT Basis aanbevolen',
+    body: 'Compliance-risico\'s en tekortkomingen in de tekst vragen om begeleide aanpak. Coaching + volledige productie zorgt voor een correcte, overtuigende advertentie.',
   },
   ONLINE: {
-    title: 'Online Pakket aanbevolen',
-    body: 'Uw presentatie is al kwalitatief. Extra online zichtbaarheid en gerichte promotie vergroten uw bereik en verkorten de verkooptijd.',
+    title: 'RFLCT Online aanbevolen',
+    body: 'Uw advertentie heeft een goede basis. AI-retouche van bestaande foto\'s + RFLCT-webpagina + sociale media vergroot uw bereik direct.',
   },
   MICRO: {
     title: 'Gerichte micro-diensten aanbevolen',
-    body: 'Selecteer de specifieke diensten die de gedetecteerde zwakke punten aanpakken en til uw advertentie naar een hoger niveau.',
-  },
-  PERFECT: {
-    title: 'Uw advertentie scoort uitstekend',
-    body: 'Proficiat! Uw presentatie is professioneel en volledig. Wenst u toch verdere ondersteuning? Neem vrijblijvend contact op.',
+    body: 'De advertentie is solide maar heeft specifieke lacunes. Selecteer de diensten die de gedetecteerde zwakke punten efficiënt aanpakken.',
   },
 };
 
-export default function RecommendationShop({ recommendation, scanId, totalScore, scanEmail, scanPhone, scanUrl }: Props) {
+export default function RecommendationShop({
+  recommendation, recommendedMicros, scanId, totalScore, scanEmail, scanPhone, scanUrl,
+}: Props) {
   const [selectedPackage, setSelectedPackage] = useState<string | null>(REC_DEFAULT_PACKAGE[recommendation]);
-  const [selectedMicros, setSelectedMicros] = useState<Set<string>>(new Set(REC_DEFAULT_MICROS[recommendation]));
-  const [message, setMessage] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-  const [error, setError] = useState('');
+  const [selectedMicros, setSelectedMicros]   = useState<Set<string>>(new Set(recommendedMicros));
+  const [message,     setMessage]     = useState('');
+  const [submitting,  setSubmitting]  = useState(false);
+  const [submitted,   setSubmitted]   = useState(false);
+  const [error,       setError]       = useState('');
 
   const { title, body } = REC_HEADLINE[recommendation];
 
   function toggleMicro(id: string) {
     setSelectedMicros((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   }
 
-  const allSelected = [
-    ...(selectedPackage ? [selectedPackage] : []),
-    ...Array.from(selectedMicros),
-  ];
+  const allSelected = [...(selectedPackage ? [selectedPackage] : []), ...Array.from(selectedMicros)];
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -101,9 +92,6 @@ export default function RecommendationShop({ recommendation, scanId, totalScore,
     }
   }
 
-  const packages = SERVICES.filter((s) => s.category === 'package');
-  const micros = SERVICES.filter((s) => s.category === 'micro');
-
   if (submitted) {
     return (
       <div className="bg-brand-dark rounded-xl p-10 text-center animate-fade-in">
@@ -118,6 +106,7 @@ export default function RecommendationShop({ recommendation, scanId, totalScore,
 
   return (
     <section className="space-y-8 animate-fade-in">
+      {/* Recommendation banner */}
       <div className="bg-brand-dark rounded-xl p-8">
         <p className="text-brand-gold text-xs font-bold uppercase tracking-widest mb-2">Onze aanbeveling</p>
         <h2 className="text-white font-bold text-2xl mb-3">{title}</h2>
@@ -125,18 +114,18 @@ export default function RecommendationShop({ recommendation, scanId, totalScore,
       </div>
 
       <form onSubmit={submit} className="space-y-8">
-        {/* Packages — radio buttons (één keuze) */}
+        {/* Packages */}
         <div>
           <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Pakketten</h3>
-          <div className="grid sm:grid-cols-3 gap-4">
-            {packages.map((svc) => {
-              const isSelected = selectedPackage === svc.id;
-              const isRec = REC_DEFAULT_PACKAGE[recommendation] === svc.id;
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {PACKAGES.map((pkg) => {
+              const isSelected = selectedPackage === pkg.id;
+              const isRec = REC_DEFAULT_PACKAGE[recommendation] === pkg.id;
               return (
                 <button
-                  key={svc.id}
+                  key={pkg.id}
                   type="button"
-                  onClick={() => setSelectedPackage(isSelected ? null : svc.id)}
+                  onClick={() => setSelectedPackage(isSelected ? null : pkg.id)}
                   className={clsx(
                     'text-left p-5 rounded-lg border-2 transition-all duration-200 relative',
                     isSelected ? 'border-brand-gold bg-brand-gold/5' : 'border-gray-100 hover:border-brand-gold/40',
@@ -148,18 +137,20 @@ export default function RecommendationShop({ recommendation, scanId, totalScore,
                     </span>
                   )}
                   <div className="flex items-start gap-3 mb-3">
-                    {/* Radio indicator */}
                     <div className={clsx(
                       'w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 mt-0.5 transition-colors',
                       isSelected ? 'border-brand-gold bg-brand-gold' : 'border-gray-300',
                     )}>
                       {isSelected && <span className="w-2 h-2 rounded-full bg-brand-dark block" />}
                     </div>
-                    <h4 className="font-bold text-gray-900 text-sm">{svc.name}</h4>
+                    <div>
+                      <h4 className="font-bold text-gray-900 text-sm">{pkg.name}</h4>
+                      <p className="text-brand-gold font-bold text-sm">€{pkg.price.toLocaleString('nl-BE')}</p>
+                    </div>
                   </div>
-                  <p className="text-gray-500 text-xs leading-relaxed mb-3">{svc.description}</p>
+                  <p className="text-gray-500 text-xs leading-relaxed mb-3">{pkg.kernpositionering}</p>
                   <div className="flex flex-wrap gap-1">
-                    {svc.tags.map((t) => (
+                    {pkg.tags.map((t) => (
                       <span key={t} className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{t}</span>
                     ))}
                   </div>
@@ -169,13 +160,18 @@ export default function RecommendationShop({ recommendation, scanId, totalScore,
           </div>
         </div>
 
-        {/* Micro-diensten — checkboxes (meerdere keuzes) */}
+        {/* Micro-diensten */}
         <div>
-          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">Losse micro-diensten</h3>
+          <h3 className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-4">
+            Losse micro-diensten
+            {recommendedMicros.length > 0 && (
+              <span className="ml-2 text-brand-gold normal-case font-normal">★ = aanbevolen op basis van uw scan</span>
+            )}
+          </h3>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {micros.map((svc) => {
+            {MICRO_SERVICES.map((svc) => {
               const isSelected = selectedMicros.has(svc.id);
-              const isRec = REC_DEFAULT_MICROS[recommendation].includes(svc.id);
+              const isRec = recommendedMicros.includes(svc.id);
               return (
                 <button
                   key={svc.id}
@@ -186,24 +182,25 @@ export default function RecommendationShop({ recommendation, scanId, totalScore,
                     isSelected ? 'border-brand-gold bg-brand-gold/5' : 'border-gray-100 hover:border-brand-gold/40',
                   )}
                 >
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 mb-1">
                     <div className={clsx(
                       'w-4 h-4 rounded border-2 flex items-center justify-center shrink-0 transition-colors',
                       isSelected ? 'border-brand-gold bg-brand-gold' : 'border-gray-300',
                     )}>
                       {isSelected && <span className="text-brand-dark text-[9px] font-bold">✓</span>}
                     </div>
-                    <h4 className="font-semibold text-gray-900 text-xs">{svc.name}</h4>
-                    {isRec && <span className="ml-auto text-brand-gold text-[9px] font-bold">★</span>}
+                    <h4 className="font-semibold text-gray-900 text-xs flex-1">{svc.name}</h4>
+                    {isRec && <span className="text-brand-gold text-[10px] font-bold shrink-0">★</span>}
                   </div>
-                  <p className="text-gray-500 text-[11px] leading-relaxed">{svc.description}</p>
+                  <p className="text-brand-gold font-bold text-xs mb-1 pl-6">€{svc.price.toLocaleString('nl-BE')}</p>
+                  <p className="text-gray-500 text-[11px] leading-relaxed pl-6">{svc.description}</p>
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Optional message */}
+        {/* Aanvullende opmerking */}
         <div>
           <label className="label" htmlFor="message">Aanvullende opmerking (optioneel)</label>
           <textarea

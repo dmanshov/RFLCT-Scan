@@ -167,11 +167,44 @@ export default function ScanResultPage() {
               </div>
             </section>
 
+            {/* Interpretatietekst */}
+            {scan.interpretatieText && (
+              <section>
+                <div className="card p-6 border-l-4 border-brand-gold">
+                  <p className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-2">Interpretatie</p>
+                  <p className="text-gray-700 text-sm leading-relaxed">{scan.interpretatieText}</p>
+                </div>
+              </section>
+            )}
+
+            {/* Kernbevindingen */}
+            {scan.kernbevindingen && scan.kernbevindingen.length > 0 && (
+              <section>
+                <h2 className="text-xl font-bold text-gray-900 mb-6">Kernbevindingen</h2>
+                <div className="grid sm:grid-cols-3 gap-4">
+                  {scan.kernbevindingen.map((kb, i) => (
+                    <div key={i} className="card p-5 space-y-3">
+                      <p className="text-xs font-bold uppercase tracking-widest text-brand-gold">Bevinding {i + 1}</p>
+                      <h3 className="font-bold text-gray-900 text-sm">{kb.wat}</h3>
+                      <div>
+                        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Impact</p>
+                        <p className="text-xs text-gray-600 leading-relaxed">{kb.impact}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Strategische lezing</p>
+                        <p className="text-xs text-gray-600 leading-relaxed">{kb.strategischeLezing}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
             <section>
-              <h2 className="text-xl font-bold text-gray-900 mb-6">Scorekaart per indicator</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-6">Scorekaart per dimensie</h2>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {Object.values(scan.scores).map((ind) => (
-                  <IndicatorCard key={ind.key} indicator={ind} />
+                {Object.values(scan.scores).map((dim) => (
+                  <IndicatorCard key={dim.key} indicator={dim} />
                 ))}
               </div>
             </section>
@@ -180,6 +213,7 @@ export default function ScanResultPage() {
               <h2 className="text-xl font-bold text-gray-900 mb-6">Gepersonaliseerd advies & diensten</h2>
               <RecommendationShop
                 recommendation={scan.recommendation!}
+                recommendedMicros={scan.recommendedMicros ?? []}
                 scanId={id}
                 totalScore={scan.totalScore}
                 scanEmail={scan.email}

@@ -12,7 +12,6 @@ import { calculateScores, deriveRecommendation, buildWorkPoints } from '@/lib/sc
 import { generateScanPdf } from '@/lib/pdf';
 import { sendMail, buildResultEmailHtml } from '@/lib/email';
 import type { ScanRecord } from '@/types/scan';
-import type { SequenceAnalysisResult } from '@/lib/analyzer';
 
 const bodySchema = z.object({
   url: z.string().url('Ongeldige URL').includes('immoweb.be', { message: 'URL moet van immoweb.be zijn' }),
@@ -57,25 +56,45 @@ export async function POST(req: NextRequest) {
       const listing = await scrapeImmowebListing(url);
       scan.listing = listing;
 
-      // Step 2 — AI analysis
+      // Step 2 — AI analysis (keepalive prevents proxy idle-timeout during long AI calls)
       emit({ type: 'status', message: "Foto's en tekst analyseren met AI…" });
       scan.status = 'analyzing';
-      const [photoAnalysis, textAnalysis] = await Promise.all([
-        analyzePhotos(listing.photos),
-        analyzeText(listing.title, listing.description),
-      ]);
-      const sequenceAnalysis: SequenceAnalysisResult = { score: 60, logicalFlow: true, issues: [] };
+
+      const keepalive = setInterval(() => emit({ type: 'heartbeat' }), 15_000);
+      let photoAnalysis, textAnalysis;
+      try {
+        [photoAnalysis, textAnalysis] = await Promise.all([
+          analyzePhotos(listing.photos),
+          analyzeText(listing.title, listing.description),
+        ]);
+      } finally {
+        clearInterval(keepalive);
+      }
 
       // Step 3 — Score
       emit({ type: 'status', message: 'Scorekaart samenstellen…' });
       scan.status = 'scoring';
-      const { breakdown, total } = calculateScores({ listing, photoAnalysis, textAnalysis, sequenceAnalysis });
-      scan.scores = breakdown;
-      scan.totalScore = total;
-      scan.recommendation = deriveRecommendation(total, breakdown, listing);
-      scan.workPoints = buildWorkPoints(breakdown);
-      scan.status = 'done';
-      scan.statusMessage = 'Scan voltooid.';
+      const { breakdown, total, kernbevindingen, interpretatieText } = calculateScores({
+        listing,
+        photoAnalysis,
+        textAnalysis,
+      });
+      const { recommendation, recommendationWhy, recommendedMicros } = deriveRecommendation(
+        total,
+        breakdown,
+        listing,
+      );
+
+      scan.scores            = breakdown;
+      scan.totalScore        = total;
+      scan.recommendation    = recommendation;
+      scan.recommendationWhy = recommendationWhy;
+      scan.recommendedMicros = recommendedMicros;
+      scan.kernbevindingen   = kernbevindingen;
+      scan.interpretatieText = interpretatieText;
+      scan.workPoints        = buildWorkPoints(breakdown);
+      scan.status            = 'done';
+      scan.statusMessage     = 'Scan voltooid.';
       saveScan(scan);
 
       // Emit done — client navigates immediately, stream stays open for email
@@ -90,20 +109,13 @@ export async function POST(req: NextRequest) {
           url,
           totalScore: total,
           workPoints: scan.workPoints!,
-          recommendation: scan.recommendation!,
+          recommendation,
         });
         const pdfFilename = `rflct-scan-${id}.pdf`;
         const internalCc = process.env.RFLCT_EMAIL ?? 'info@rflct.be';
-        console.info(`[scan] PDF generated: ${pdfBuffer.length} bytes — sending to ${email} (CC: ${internalCc})`);
+        console.info(`[scan] PDF ${pdfBuffer.length} bytes — sending to ${email} (CC: ${internalCc})`);
         try {
-          await sendMail({
-            to: email,
-            cc: internalCc,
-            subject: `Uw RFLCT Advertentie-scan — score ${total}/100`,
-            html,
-            pdfBuffer,
-            pdfFilename,
-          });
+          await sendMail({ to: email, cc: internalCc, subject: `Uw RFLCT Advertentie-scan — score ${total}/100`, html, pdfBuffer, pdfFilename });
           console.info('[scan] Email sent to:', email, '— CC:', internalCc);
         } catch (e) {
           console.error('[scan] Email FAILED:', String(e));
