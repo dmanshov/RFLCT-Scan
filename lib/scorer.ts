@@ -197,22 +197,20 @@ function scoreDim4(listing: ImmowebListing): DimensionScore {
   );
 
   // Sub 4.4 — Overstromingsrisico (max 3)
-  const s44 = sub('overstromingsrisico', 'Overstromingsrisico (P- & G-score)', listing.compliance.hasFloodRisk ? 3 : 0, 3,
-    !listing.compliance.hasFloodRisk
+  // Partial score when flood risk field present but P/G-score is "niet gespecificeerd"
+  const { hasFloodRisk, floodRiskUnspecified } = listing.compliance;
+  const floodScore = !hasFloodRisk ? 0 : floodRiskUnspecified ? 1 : 3;
+  const s44 = sub('overstromingsrisico', 'Overstromingsrisico (P- & G-score)', floodScore, 3,
+    !hasFloodRisk
       ? ['Overstromingsgevoeligheid (P- en G-score) niet vermeld — wettelijk verplicht in Vlaanderen.']
+      : floodRiskUnspecified
+      ? ['P- en/of G-score staat op "niet gespecificeerd" — vraag de correcte waarden op bij gemeente of notaris.']
       : [],
-    listing.compliance.hasFloodRisk ? ['Overstromingsrisico correct vermeld.'] : [],
-  );
-
-  // Sub 4.5 — Stedenbouwkundige info (max 2)
-  const hasSteden = /stedenbouwkundig|gewestplan|rup\b|bouwvergunning|vergund/i.test(listing.description);
-  const s45 = sub('stedenbouwkundig', 'Stedenbouwkundige informatie', hasSteden ? 2 : 0, 2,
-    !hasSteden ? ['Geen stedenbouwkundige informatie gevonden (bestemming, vergund gebruik).'] : [],
-    hasSteden ? ['Stedenbouwkundige informatie aanwezig.'] : [],
+    floodScore === 3 ? ['Overstromingsrisico correct vermeld.'] : [],
   );
 
   // dim4 gebruikt dynamic weighting: N/A subcriteria worden uit de noemer gehaald
-  return buildDim('dim4', 'Wettelijk verplichte vermeldingen', 20, [s41, s42, s43, s44, s45], true);
+  return buildDim('dim4', 'Wettelijk verplichte vermeldingen', 20, [s41, s42, s43, s44], true);
 }
 
 function scoreDim5(listing: ImmowebListing): DimensionScore {
@@ -314,11 +312,6 @@ const KERN: Record<string, KernBevinding> = {
     wat: 'Overstromingsgevoeligheid niet vermeld',
     impact: "Het niet vermelden van P- en G-score is een wettelijke overtreding in Vlaanderen.",
     strategischeLezing: "Vermeld de overstromingsgevoeligheid conform gewestelijke regelgeving.",
-  },
-  'stedenbouwkundig': {
-    wat: 'Geen stedenbouwkundige informatie',
-    impact: "Professionele en voorzichtige kopers verwachten info over bestemming en vergund gebruik.",
-    strategischeLezing: "Vermeld de stedenbouwkundige bestemming of verwijs naar het beschikbare uittreksel.",
   },
   'contact-naam': {
     wat: 'Naam contactpersoon ontbreekt',

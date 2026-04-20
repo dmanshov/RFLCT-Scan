@@ -32,6 +32,7 @@ export interface ImmowebListing {
     hasAsbestosInfo: boolean;
     hasEpcLabel: boolean;
     hasFloodRisk: boolean;
+    floodRiskUnspecified: boolean; // true when P/G-score field present but value is "niet gespecificeerd"
   };
 }
 
@@ -176,7 +177,7 @@ export const MICRO_SERVICES: MicroService[] = [
     id: 'meta',
     name: 'Meta-advertentiecampagne (1 week)',
     price: 195,
-    description: 'Gerichte Facebook/Instagram-campagne van 1 week, exclusief mediabudget.',
+    description: 'Gerichte Facebook/Instagram-campagne van 1 week, inclusief mediabudget.',
   },
   {
     id: 'premium-immoweb',
