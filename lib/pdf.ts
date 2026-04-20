@@ -4,6 +4,7 @@ import {
   Page,
   Text,
   View,
+  Image,
   StyleSheet,
   Font,
   renderToBuffer,
@@ -37,6 +38,29 @@ const s = StyleSheet.create({
   infoValue:     { fontSize: 9, flex: 1 },
 });
 
+// Download a photo URL as a base64 data URI for reliable PDF embedding.
+// Returns null on any failure so the page renders without an image.
+async function fetchPhotoSrc(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Referer': 'https://www.immoweb.be/',
+        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+      },
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!res.ok) return null;
+    const ct = res.headers.get('content-type') ?? '';
+    if (!ct.startsWith('image/')) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.byteLength < 500) return null;
+    return `data:${ct};base64,${buf.toString('base64')}`;
+  } catch {
+    return null;
+  }
+}
+
 function verdictColor(v: string) {
   return v === 'good' ? GREEN : v === 'average' ? ORANGE : RED;
 }
@@ -50,7 +74,7 @@ function Footer({ email }: { email: string }) {
 
 // ─── Blok 1+2: Cover + Interpretatietekst ─────────────────────────────────
 
-function PageCover({ scan }: { scan: ScanRecord }) {
+function PageCover({ scan, mainPhotoSrc }: { scan: ScanRecord; mainPhotoSrc: string | null }) {
   const listing = scan.listing!;
   const total   = scan.totalScore ?? 0;
   const rec     = scan.recommendation ?? 'ONLINE';
@@ -73,20 +97,25 @@ function PageCover({ scan }: { scan: ScanRecord }) {
       React.createElement(Text, { style: { color: '#9CA3AF', fontSize: 9 } }, new Date(scan.createdAt).toLocaleDateString('nl-BE')),
     ),
 
+    // Hoofdfoto (full-width hero)
+    mainPhotoSrc
+      ? React.createElement(Image, { src: mainPhotoSrc, style: { width: 595, height: 210, objectFit: 'cover' } })
+      : null,
+
     // Blok 1 — Advertentie-info + score
     React.createElement(View, { style: s.section },
       React.createElement(Text, { style: s.sectionTitle }, 'Blok 1 — Advertentie & Totaalscore'),
       React.createElement(View, { style: { ...s.card, flexDirection: 'row', alignItems: 'flex-start', gap: 20 } },
         // Score cirkel
-        React.createElement(View, { style: { width: 90, height: 90, borderRadius: 45, backgroundColor: NAVY, alignItems: 'center', justifyContent: 'center' } },
-          React.createElement(Text, { style: { color: scoreColor, fontSize: 32, fontFamily: 'Helvetica-Bold', lineHeight: 1 } }, `${total}`),
-          React.createElement(Text, { style: { color: '#9CA3AF', fontSize: 10, marginTop: 2 } }, '/ 100'),
+        React.createElement(View, { style: { width: 80, height: 80, borderRadius: 40, backgroundColor: NAVY, alignItems: 'center', justifyContent: 'center' } },
+          React.createElement(Text, { style: { color: scoreColor, fontSize: 28, fontFamily: 'Helvetica-Bold', lineHeight: 1 } }, `${total}`),
+          React.createElement(Text, { style: { color: '#9CA3AF', fontSize: 9, marginTop: 2 } }, '/ 100'),
         ),
         // Info
         React.createElement(View, { style: { flex: 1 } },
-          React.createElement(Text, { style: { fontFamily: 'Helvetica-Bold', fontSize: 12, marginBottom: 4 } }, listing.title || listing.url),
-          React.createElement(View, { style: { backgroundColor: GOLD, borderRadius: 3, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', marginBottom: 8 } },
-            React.createElement(Text, { style: { color: NAVY, fontSize: 9, fontFamily: 'Helvetica-Bold' } }, recNames[rec] ?? rec),
+          React.createElement(Text, { style: { fontFamily: 'Helvetica-Bold', fontSize: 11, marginBottom: 4 } }, listing.title || listing.url),
+          React.createElement(View, { style: { backgroundColor: GOLD, borderRadius: 3, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', marginBottom: 6 } },
+            React.createElement(Text, { style: { color: NAVY, fontSize: 8, fontFamily: 'Helvetica-Bold' } }, recNames[rec] ?? rec),
           ),
           React.createElement(View, { style: { ...s.row, marginBottom: 3 } },
             React.createElement(Text, { style: s.infoLabel }, 'Locatie'),
@@ -116,17 +145,7 @@ function PageCover({ scan }: { scan: ScanRecord }) {
       ? React.createElement(View, { style: s.section },
           React.createElement(Text, { style: s.sectionTitle }, 'Blok 2 — Interpretatie'),
           React.createElement(View, { style: { ...s.card, borderLeft: `3 solid ${GOLD}` } },
-            React.createElement(Text, { style: { fontSize: 10, lineHeight: 1.6, color: '#374151' } }, scan.interpretatieText),
-          ),
-        )
-      : null,
-
-    // Aanbeveling toelichting
-    scan.recommendationWhy
-      ? React.createElement(View, { style: s.section },
-          React.createElement(Text, { style: s.sectionTitle }, 'Aanbeveling — toelichting'),
-          React.createElement(View, { style: s.card },
-            React.createElement(Text, { style: { fontSize: 10, lineHeight: 1.5, color: '#374151' } }, scan.recommendationWhy),
+            React.createElement(Text, { style: { fontSize: 9, lineHeight: 1.6, color: '#374151' } }, scan.interpretatieText),
           ),
         )
       : null,
@@ -386,18 +405,21 @@ function PageAanbeveling({ scan }: { scan: ScanRecord }) {
 
 // ─── Root document ────────────────────────────────────────────────────────────
 
-function RflctDocument({ scan }: { scan: ScanRecord }) {
+function RflctDocument({ scan, mainPhotoSrc }: { scan: ScanRecord; mainPhotoSrc: string | null }) {
   return React.createElement(
     Document,
     { title: `RFLCT Advertentie-scan — ${scan.listing?.title ?? scan.url}` },
-    React.createElement(PageCover, { scan }),
-    React.createElement(PageScorekaart, { scan }),
-    React.createElement(PageKernbevindingen, { scan }),
-    React.createElement(PageAanbeveling, { scan }),
+    React.createElement(PageCover, { scan, mainPhotoSrc }),       // p1: foto + score + interpretatie
+    React.createElement(PageKernbevindingen, { scan }),            // p2: kernbevindingen + wettelijk
+    React.createElement(PageScorekaart, { scan }),                 // p3: gedetailleerde scorekaart
+    React.createElement(PageAanbeveling, { scan }),                // p4: diensten + CTA
   );
 }
 
 export async function generateScanPdf(scan: ScanRecord): Promise<Buffer> {
-  const doc = React.createElement(RflctDocument, { scan }) as React.ReactElement<DocumentProps>;
+  const photoUrl = scan.listing?.photos[0] ?? null;
+  const mainPhotoSrc = photoUrl ? await fetchPhotoSrc(photoUrl) : null;
+  console.info(`[pdf] Main photo: ${mainPhotoSrc ? 'loaded' : 'not available'}`);
+  const doc = React.createElement(RflctDocument, { scan, mainPhotoSrc }) as React.ReactElement<DocumentProps>;
   return await renderToBuffer(doc);
 }
