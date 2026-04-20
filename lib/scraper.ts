@@ -158,6 +158,13 @@ function parseJsonApi(raw: any, url: string, id: string): ImmowebListing {
   const street: string | null = streetName ? `${streetName}${streetNum ? ` ${streetNum}` : ''}` : null;
 
   const dl = description.toLowerCase();
+  // Flood risk is stored in structured property fields, not just description text
+  const flooding = property?.flooding ?? raw?.flooding ?? {};
+  const hasFloodRiskStructured =
+    flooding?.floodZoneType     !== undefined ||
+    flooding?.floodingNorm      !== undefined ||
+    flooding?.partialFloodingInsuranceRequired !== undefined ||
+    property?.floodZoneType     !== undefined;
   return {
     id: String(raw?.id ?? id),
     url,
@@ -184,7 +191,7 @@ function parseJsonApi(raw: any, url: string, id: string): ImmowebListing {
       hasRenovationObligation: /renovatieplicht|renovatieverplichting|r[eé]novation obligatoire/.test(dl),
       hasAsbestosInfo: /asbest|asbestattest|amiante/.test(dl),
       hasEpcLabel: !!epcLabel,
-      hasFloodRisk: /overstromingsgevoeligheid|watertoets|risque d.inondation|p-score|g-score/.test(dl),
+      hasFloodRisk: hasFloodRiskStructured || /overstromingsgevoeligheid|watertoets|risque d.inondation|p-score|g-score/.test(dl),
     },
   };
 }
@@ -268,7 +275,11 @@ function parseHtmlFallback(html: string, url: string, id: string): ImmowebListin
       hasRenovationObligation: /renovatieplicht|renovatieverplichting/.test(dl),
       hasAsbestosInfo: /asbest|asbestattest|amiante/.test(dl),
       hasEpcLabel: !!epcLabelMatch || /\bepc\b/.test(dl),
-      hasFloodRisk: /overstromingsgevoeligheid|watertoets|p-score|g-score/.test(dl),
+      // Check JSON blob fields first (floodZoneType etc.), then fall back to text keywords
+      hasFloodRisk: /"floodZoneType"\s*:/.test(searchable)
+        || /"floodingNorm"\s*:/.test(searchable)
+        || /"partialFloodingInsuranceRequired"\s*:/.test(searchable)
+        || /overstromingsgevoeligheid|watertoets|p-score|g-score/.test(dl),
     },
   };
 }
