@@ -97,9 +97,9 @@ function PageCover({ scan, mainPhotoSrc }: { scan: ScanRecord; mainPhotoSrc: str
       React.createElement(Text, { style: { color: '#9CA3AF', fontSize: 9 } }, new Date(scan.createdAt).toLocaleDateString('nl-BE')),
     ),
 
-    // Hoofdfoto (full-width hero)
+    // Hoofdfoto (uitgelijnd op de inhoudsmarges)
     mainPhotoSrc
-      ? React.createElement(Image, { src: mainPhotoSrc, style: { width: 595, height: 210, objectFit: 'cover' } })
+      ? React.createElement(Image, { src: mainPhotoSrc, style: { marginHorizontal: 40, marginTop: 16, height: 210, borderRadius: 6, objectFit: 'cover' } })
       : null,
 
     // Blok 1 — Advertentie-info + score
