@@ -92,22 +92,35 @@ function extractPhotos(html: string): string[] {
 function extractPhotosOrdered(html: string): { photos: string[]; floorPlans: string[] } {
   const searchable = html.replace(/\\\//g, '/');
 
-  const largeUrlRe = /"largeUrl"\s*:\s*"(https:\/\/(?:media-resize\.immowebstatic\.be|picture\.immoweb\.be)[^"]+)"/g;
   const photos: string[] = [];
   const floorPlans: string[] = [];
   const seen = new Set<string>();
-  let m: RegExpExecArray | null;
 
+  const IMMOWEB_URL_RE = /https:\/\/(?:media-resize\.immowebstatic\.be|picture\.immoweb\.be)\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp)/gi;
+  const FLOOR_PLAN_RE  = /FLOOR_PLAN|floor[_\-]?plan|grondplan/i;
+
+  // Pass 1: largeUrl fields — classify by ±600 char context
+  const largeUrlRe = /"largeUrl"\s*:\s*"(https:\/\/(?:media-resize\.immowebstatic\.be|picture\.immoweb\.be)[^"]+)"/g;
+  let m: RegExpExecArray | null;
   while ((m = largeUrlRe.exec(searchable)) !== null) {
     const url = m[1];
     if (seen.has(url)) continue;
     seen.add(url);
-    // Check ±300 chars around the match for a FLOOR_PLAN type marker
-    const ctx = searchable.slice(Math.max(0, m.index - 300), m.index + 300);
-    if (/FLOOR_PLAN/i.test(ctx)) {
-      floorPlans.push(url);
-    } else {
-      photos.push(url);
+    const ctx = searchable.slice(Math.max(0, m.index - 600), m.index + 600);
+    (FLOOR_PLAN_RE.test(ctx) ? floorPlans : photos).push(url);
+  }
+
+  // Pass 2: floor plan marker sweep — picks up URLs in "url"/"originalUrl" fields
+  // and any other URL field that isn't largeUrl
+  const fpMarkerRe = new RegExp(FLOOR_PLAN_RE.source, 'gi');
+  let fp: RegExpExecArray | null;
+  while ((fp = fpMarkerRe.exec(searchable)) !== null) {
+    const ctx = searchable.slice(Math.max(0, fp.index - 800), fp.index + 800);
+    for (const u of ctx.match(IMMOWEB_URL_RE) ?? []) {
+      if (!seen.has(u)) {
+        seen.add(u);
+        floorPlans.push(u);
+      }
     }
   }
 
@@ -144,7 +157,8 @@ function parseJsonApi(raw: any, url: string, id: string): ImmowebListing {
     const p = pic as any;
     const picUrl: string = p.largeUrl ?? p.url ?? p.mediumUrl ?? '';
     if (!picUrl) continue;
-    (p.type === 'FLOOR_PLAN' || p.category === 'FLOOR_PLAN' ? floorPlans : photos).push(picUrl);
+    const typeStr = String(p.type ?? p.category ?? p.mediaType ?? p.subType ?? p.pictureType ?? '');
+    (/FLOOR_PLAN|floor[_\-]?plan|grondplan/i.test(typeStr) ? floorPlans : photos).push(picUrl);
   }
 
   const epcScore: number | null = energy.primaryEnergyConsumptionPerSqm ?? energy.primaryEnergyConsumption ?? null;
