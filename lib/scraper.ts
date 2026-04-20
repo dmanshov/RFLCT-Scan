@@ -223,6 +223,10 @@ function parseHtmlFallback(html: string, url: string, id: string): ImmowebListin
     ? `${streetNameMatch[1]}${streetNumMatch ? ` ${streetNumMatch[1]}` : ''}`
     : null;
 
+  // Extract construction year from embedded JSON blob
+  const yearMatch = searchable.match(/"constructionYear"\s*:\s*(\d{4})/);
+  const constructionYear = yearMatch ? parseInt(yearMatch[1]) : null;
+
   const epcLabelMatch =
     html.match(/["'](?:epcScore|energyClass|epcLabel)["']\s*:\s*["']([A-G][+]{0,2})["']/i)
     ?? html.match(/\bEPC[:\s\-–]*([A-G][+]{0,2})\b/i);
@@ -247,7 +251,7 @@ function parseHtmlFallback(html: string, url: string, id: string): ImmowebListin
     area: areaMatch ? parseInt(areaMatch[1]) : null,
     bedrooms: bedroomMatch ? parseInt(bedroomMatch[1]) : null,
     bathrooms: null,
-    constructionYear: null,
+    constructionYear,
     agencyName: null,
     agencyPhone,
     agencyEmail,
