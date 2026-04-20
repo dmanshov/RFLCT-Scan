@@ -170,7 +170,15 @@ export async function analyzePhotos(photoUrls: string[]): Promise<PhotoAnalysisR
             text: `Je bent expert vastgoedfotograaf. Je analyseert de EERSTE ${imageBlocks.length} foto's (van ${photoUrls.length} totaal) van een Immoweb-advertentie, IN VOLGORDE (foto 1 = eerste in de advertentie).
 
 STAP 0 — Grondplan-detectie:
-Bekijk alle ${imageBlocks.length} foto's. Noteer de 0-gebaseerde indices van foto's die een technisch grondplan of plattegrond zijn (bovenaanzicht, maatlijnen of ruimtelabels, schematische weergave — géén echte interieur/exterieur-foto). Geen grondplannen → lege array.
+Bekijk alle ${imageBlocks.length} foto's. Een grondplan is UITSLUITEND een technische bovenaanzicht-tekening met kameraanduidingen (bijv. "woonkamer", "slaapkamer") of meetlijnen in meters — zoals een architect of landmeter opmaakt. Geef de 0-gebaseerde indices terug van foto's die hieraan voldoen.
+
+TELT NIET als grondplan (→ niet opnemen):
+- Artistieke schetsen of aquarellen van een woning (zelfs al lijken ze op een plattegrond)
+- Exterieur-illustraties, 3D-renders of artist impressions
+- Foto's van een tuinontwerp of terrasschets
+- Decoratieve tekeningen zonder maatlijnen of ruimtelabels
+- Gewone interieur- of exterieurbeelden
+Bij twijfel: NIET opnemen. Geen grondplannen → lege array.
 
 STAP 1 — Ruimte-identificatie (intern, verschijnt NIET in JSON):
 Noteer voor elke foto het type ruimte/element: exterieur/gevel, tuin/terras, hal/inkomhal, living/woonkamer, keuken, eetkamer, slaapkamer, badkamer, bureau, bergruimte/kelder, garage, of detail/overig.
