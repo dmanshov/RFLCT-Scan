@@ -71,6 +71,15 @@ export async function POST(req: NextRequest) {
         clearInterval(keepalive);
       }
 
+      // Move visually-detected floor plans out of photos array
+      if (photoAnalysis.floorPlanIndices.length > 0) {
+        const fpSet = new Set(photoAnalysis.floorPlanIndices);
+        const detected = listing.photos.filter((_, i) => fpSet.has(i));
+        listing.photos = listing.photos.filter((_, i) => !fpSet.has(i));
+        listing.floorPlans = [...listing.floorPlans, ...detected];
+        console.info(`[scan] Moved ${detected.length} visually-detected floor plan(s) to floorPlans`);
+      }
+
       // Step 3 — Score
       emit({ type: 'status', message: 'Scorekaart samenstellen…' });
       scan.status = 'scoring';

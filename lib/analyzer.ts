@@ -21,6 +21,8 @@ export interface PhotoAnalysisResult {
   eersteZwakkePositie: number | null; // 0-based index of first misordered photo, null if none
   logicalFlow: boolean;
 
+  floorPlanIndices: number[];    // 0-based indices of photos identified as floor plans
+
   issues: string[];
   strengths: string[];
 }
@@ -131,6 +133,7 @@ export async function analyzePhotos(photoUrls: string[]): Promise<PhotoAnalysisR
       belichting: 0, perspectief: 0, witbalans: 0, scherpte: 0, consistentie: 0,
       qualityTotal: 0,
       sequenceScore: 0, openingsFoto: 'Geen foto\'s', eersteZwakkePositie: null, logicalFlow: false,
+      floorPlanIndices: [],
       issues: ['Geen foto\'s gevonden in de advertentie.'],
       strengths: [],
     };
@@ -147,6 +150,7 @@ export async function analyzePhotos(photoUrls: string[]): Promise<PhotoAnalysisR
       belichting: 0, perspectief: 0, witbalans: 0, scherpte: 0, consistentie: 0,
       qualityTotal: 0,
       sequenceScore: 0, openingsFoto: 'Foto\'s konden niet worden geladen', eersteZwakkePositie: null, logicalFlow: false,
+      floorPlanIndices: [],
       issues: [`${photoUrls.length} foto('s) gevonden maar niet laadbaar (CDN-blokkade). Fotokwaliteit kon niet worden beoordeeld.`],
       strengths: [],
     };
@@ -164,6 +168,9 @@ export async function analyzePhotos(photoUrls: string[]): Promise<PhotoAnalysisR
           {
             type: 'text',
             text: `Je bent expert vastgoedfotograaf. Je analyseert de EERSTE ${imageBlocks.length} foto's (van ${photoUrls.length} totaal) van een Immoweb-advertentie, IN VOLGORDE (foto 1 = eerste in de advertentie).
+
+STAP 0 — Grondplan-detectie:
+Bekijk alle ${imageBlocks.length} foto's. Noteer de 0-gebaseerde indices van foto's die een technisch grondplan of plattegrond zijn (bovenaanzicht, maatlijnen of ruimtelabels, schematische weergave — géén echte interieur/exterieur-foto). Geen grondplannen → lege array.
 
 STAP 1 — Ruimte-identificatie (intern, verschijnt NIET in JSON):
 Noteer voor elke foto het type ruimte/element: exterieur/gevel, tuin/terras, hal/inkomhal, living/woonkamer, keuken, eetkamer, slaapkamer, badkamer, bureau, bergruimte/kelder, garage, of detail/overig.
@@ -209,6 +216,7 @@ REGELS voor issues/strengths:
 
 Geef ENKEL JSON terug:
 {
+  "floorPlanIndices": [0-gebaseerde indices van grondplan-foto's, of lege array],
   "belichting": 0-3,
   "perspectief": 0-3,
   "witbalans": 0-3,
@@ -229,6 +237,7 @@ Geef ENKEL JSON terug:
 
   const text = response.content[0].type === 'text' ? response.content[0].text : '';
   const raw = parseJson<{
+    floorPlanIndices: number[];
     belichting: number; perspectief: number; witbalans: number; scherpte: number; consistentie: number;
     sequenceScore: number; openingsFoto: string; eersteZwakkePositie: number | null;
     logicalFlow: boolean; issues: string[]; strengths: string[];
@@ -241,6 +250,11 @@ Geef ENKEL JSON terug:
   const scherpte = asp(raw.scherpte);
   const consistentie = asp(raw.consistentie);
 
+  const floorPlanIndices = Array.isArray(raw.floorPlanIndices)
+    ? raw.floorPlanIndices.filter((i): i is number => typeof i === 'number' && i >= 0 && i < imageBlocks.length)
+    : [];
+  console.info(`[analyzer] Visual floor plan detection: indices ${JSON.stringify(floorPlanIndices)}`);
+
   return {
     belichting, perspectief, witbalans, scherpte, consistentie,
     qualityTotal: belichting + perspectief + witbalans + scherpte + consistentie,
@@ -248,6 +262,7 @@ Geef ENKEL JSON terug:
     openingsFoto: raw.openingsFoto ?? '',
     eersteZwakkePositie: raw.eersteZwakkePositie ?? null,
     logicalFlow: !!raw.logicalFlow,
+    floorPlanIndices,
     issues: Array.isArray(raw.issues) ? raw.issues : [],
     strengths: Array.isArray(raw.strengths) ? raw.strengths : [],
   };
