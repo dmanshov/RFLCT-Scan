@@ -9,7 +9,7 @@ import {
   renderToBuffer,
   type DocumentProps,
 } from '@react-pdf/renderer';
-import type { ScanRecord, DimensionScore, SubScore, KernBevinding } from '@/types/scan';
+import type { ScanRecord, DimensionScore, SubScore, KernBevinding, Package, MicroService } from '@/types/scan';
 import { PACKAGES, MICRO_SERVICES } from '@/types/scan';
 
 Font.register({ family: 'Helvetica', src: 'Helvetica' });
@@ -256,82 +256,126 @@ function PageKernbevindingen({ scan }: { scan: ScanRecord }) {
   );
 }
 
-// ─── Blok 6+7: Aanbeveling + Contact ─────────────────────────────────────────
+// ─── Blok 6: Package card helper ─────────────────────────────────────────────
+
+function PackageCard({ pkg, isRec }: { pkg: Package; isRec: boolean }) {
+  return React.createElement(View, {
+    key: pkg.id,
+    style: {
+      flex: 1,
+      backgroundColor: isRec ? NAVY : LIGHT,
+      borderRadius: 6,
+      padding: '10 12',
+      ...(isRec ? { borderTop: `3 solid ${GOLD}` } : {}),
+    },
+  },
+    isRec
+      ? React.createElement(View, { style: { backgroundColor: GOLD, borderRadius: 2, paddingHorizontal: 5, paddingVertical: 1, alignSelf: 'flex-start', marginBottom: 5 } },
+          React.createElement(Text, { style: { color: NAVY, fontSize: 7, fontFamily: 'Helvetica-Bold' } }, 'Aanbevolen'),
+        )
+      : null,
+    React.createElement(View, { style: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 } },
+      React.createElement(Text, { style: { fontFamily: 'Helvetica-Bold', fontSize: 10, color: isRec ? '#FFFFFF' : NAVY, flex: 1, marginRight: 4 } }, pkg.name),
+      React.createElement(Text, { style: { fontFamily: 'Helvetica-Bold', fontSize: 10, color: GOLD } }, `€${pkg.price.toLocaleString('nl-BE')}`),
+    ),
+    React.createElement(Text, { style: { fontSize: 8, color: isRec ? '#D1D5DB' : GRAY, lineHeight: 1.4, marginBottom: 5 } }, pkg.kernpositionering),
+    React.createElement(View, { style: { flexDirection: 'row', flexWrap: 'wrap', gap: 3 } },
+      ...pkg.tags.map((t) =>
+        React.createElement(View, { key: t, style: { backgroundColor: isRec ? '#1E3A5F' : '#E5E7EB', borderRadius: 2, paddingHorizontal: 4, paddingVertical: 1 } },
+          React.createElement(Text, { style: { fontSize: 7, color: isRec ? '#93C5FD' : '#6B7280' } }, t),
+        ),
+      ),
+    ),
+  );
+}
+
+function MicroCard({ m, isRec }: { m: MicroService; isRec: boolean }) {
+  return React.createElement(View, {
+    key: m.id,
+    style: {
+      flex: 1,
+      backgroundColor: LIGHT,
+      borderRadius: 5,
+      padding: '7 9',
+      ...(isRec ? { borderTop: `2 solid ${GOLD}` } : {}),
+    },
+  },
+    React.createElement(View, { style: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 2 } },
+      React.createElement(Text, { style: { fontSize: 8, fontFamily: 'Helvetica-Bold', color: NAVY, flex: 1, marginRight: 4 } }, m.name),
+      isRec ? React.createElement(Text, { style: { fontSize: 9, color: GOLD } }, '★') : null,
+    ),
+    React.createElement(Text, { style: { fontSize: 9, color: GOLD, fontFamily: 'Helvetica-Bold', marginBottom: 2 } }, `€${m.price.toLocaleString('nl-BE')}`),
+    React.createElement(Text, { style: { fontSize: 7, color: GRAY, lineHeight: 1.3 } }, m.description),
+  );
+}
+
+// ─── Blok 6+7: Diensten & Offerte ────────────────────────────────────────────
 
 function PageAanbeveling({ scan }: { scan: ScanRecord }) {
-  const rec  = scan.recommendation ?? 'ONLINE';
-  const pkg  = PACKAGES.find((p) => p.id === rec.toLowerCase());
-  const micros = (scan.recommendedMicros ?? [])
-    .map((id) => MICRO_SERVICES.find((m) => m.id === id))
-    .filter((m): m is NonNullable<typeof m> => m !== undefined);
+  const rec              = scan.recommendation ?? 'ONLINE';
+  const recPkgId         = ({ COMPLEET: 'compleet', PRODUCTIE: 'productie', BASIS: 'basis', ONLINE: 'online', MICRO: null } as Record<string, string | null>)[rec] ?? null;
+  const recommendedMicros = scan.recommendedMicros ?? [];
+
+  // Group micro-services into rows of 3 for stable layout
+  const microRows: MicroService[][] = [];
+  for (let i = 0; i < MICRO_SERVICES.length; i += 3) microRows.push(MICRO_SERVICES.slice(i, i + 3));
 
   return React.createElement(Page, { size: 'A4', style: s.page },
     React.createElement(View, { style: s.header },
-      React.createElement(Text, { style: s.headerTitle }, 'RFLCT · Aanbeveling & Diensten'),
+      React.createElement(Text, { style: s.headerTitle }, 'RFLCT · Diensten & Offerte'),
     ),
 
-    // Blok 6 — Aanbeveling
+    // Blok 6 — Pakketten (2×2 grid)
     React.createElement(View, { style: { ...s.section, marginTop: 16 } },
-      React.createElement(Text, { style: s.sectionTitle }, 'Blok 6 — Aanbeveling'),
-
-      // Package card (als van toepassing)
-      pkg
-        ? React.createElement(View, { style: { backgroundColor: NAVY, borderRadius: 8, padding: '14 18', marginBottom: 10 } },
-            React.createElement(View, { style: { ...s.row, marginBottom: 6 } },
-              React.createElement(Text, { style: { color: GOLD, fontFamily: 'Helvetica-Bold', fontSize: 13, flex: 1 } }, pkg.name),
-              React.createElement(Text, { style: { color: GOLD, fontFamily: 'Helvetica-Bold', fontSize: 13 } }, `€${pkg.price.toLocaleString('nl-BE')}`),
-            ),
-            React.createElement(Text, { style: { color: '#D1D5DB', fontSize: 9, lineHeight: 1.5, marginBottom: 8 } }, pkg.kernpositionering),
-            React.createElement(View, { style: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 } },
-              ...pkg.tags.map((t) =>
-                React.createElement(View, { key: t, style: { backgroundColor: '#1E3A5F', borderRadius: 3, paddingHorizontal: 6, paddingVertical: 2 } },
-                  React.createElement(Text, { style: { color: '#93C5FD', fontSize: 8 } }, t),
-                ),
-              ),
-            ),
-          )
-        : null,
-
-      // MICRO: aanbevolen micro-diensten
-      micros.length > 0
-        ? React.createElement(View, { style: { marginTop: pkg ? 8 : 0 } },
-            React.createElement(Text, { style: { fontSize: 9, color: GRAY, fontFamily: 'Helvetica-Bold', marginBottom: 6 } }, 'Aanbevolen micro-diensten op basis van uw scan:'),
-            ...micros.map((m) =>
-              React.createElement(View, { key: m.id, style: { ...s.row, ...s.card, marginBottom: 4 } },
-                React.createElement(Text, { style: { flex: 1, fontSize: 10, fontFamily: 'Helvetica-Bold' } }, m.name),
-                React.createElement(Text, { style: { color: GOLD, fontFamily: 'Helvetica-Bold', fontSize: 10 } }, `€${m.price.toLocaleString('nl-BE')}`),
-              ),
-            ),
-          )
-        : null,
-
-      // Toelichting
-      scan.recommendationWhy
-        ? React.createElement(View, { style: { ...s.card, marginTop: 8 } },
-            React.createElement(Text, { style: { fontSize: 9, color: '#374151', lineHeight: 1.5 } }, scan.recommendationWhy),
-          )
-        : null,
+      React.createElement(Text, { style: s.sectionTitle }, 'Blok 6 — Pakketten'),
+      React.createElement(View, { style: { flexDirection: 'row', gap: 7, marginBottom: 7 } },
+        PackageCard({ pkg: PACKAGES[0], isRec: PACKAGES[0].id === recPkgId }),
+        PackageCard({ pkg: PACKAGES[1], isRec: PACKAGES[1].id === recPkgId }),
+      ),
+      React.createElement(View, { style: { flexDirection: 'row', gap: 7 } },
+        PackageCard({ pkg: PACKAGES[2], isRec: PACKAGES[2].id === recPkgId }),
+        PackageCard({ pkg: PACKAGES[3], isRec: PACKAGES[3].id === recPkgId }),
+      ),
     ),
 
-    // Blok 7 — Contact & afsluiting
-    React.createElement(View, { style: { ...s.section, marginTop: 10 } },
-      React.createElement(Text, { style: s.sectionTitle }, 'Blok 7 — Volgende stap'),
-      React.createElement(View, { style: { backgroundColor: LIGHT, borderRadius: 8, padding: '14 18' } },
-        React.createElement(Text, { style: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: NAVY, marginBottom: 8 } }, 'Uw vastgoedcoach staat klaar.'),
-        React.createElement(Text, { style: { fontSize: 9, color: '#374151', lineHeight: 1.6, marginBottom: 10 } },
-          'Dit rapport is een eerste diagnose van uw Immoweb-advertentie. Een RFLCT-vastgoedcoach bespreekt de bevindingen met u en stelt een aanpak op maat voor — zonder verbintenis.',
+    // Micro-diensten (rows of 3)
+    React.createElement(View, { style: s.section },
+      React.createElement(View, { style: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 } },
+        React.createElement(Text, { style: { ...s.sectionTitle, marginBottom: 0 } }, 'Micro-diensten'),
+        recommendedMicros.length > 0
+          ? React.createElement(Text, { style: { fontSize: 8, color: GOLD } }, '★ = aanbevolen op basis van uw scan')
+          : null,
+      ),
+      ...microRows.map((row, ri) =>
+        React.createElement(View, { key: ri, style: { flexDirection: 'row', gap: 6, marginBottom: 6 } },
+          ...row.map((m) => MicroCard({ m, isRec: recommendedMicros.includes(m.id) })),
         ),
-        React.createElement(View, { style: s.row },
-          React.createElement(Text, { style: { fontSize: 9, color: NAVY, fontFamily: 'Helvetica-Bold', width: 60 } }, 'E-mail'),
-          React.createElement(Text, { style: { fontSize: 9, color: '#374151' } }, 'info@rflct.be'),
+      ),
+    ),
+
+    // Blok 7 — CTA
+    React.createElement(View, { style: s.section },
+      React.createElement(Text, { style: s.sectionTitle }, 'Blok 7 — Offerte aanvragen'),
+      React.createElement(View, { style: { backgroundColor: NAVY, borderRadius: 8, borderTop: `4 solid ${GOLD}`, padding: '16 20' } },
+        React.createElement(Text, { style: { color: GOLD, fontSize: 8, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5 } }, 'Klaar om uw advertentie naar het volgende niveau te tillen?'),
+        React.createElement(Text, { style: { color: '#FFFFFF', fontSize: 15, fontFamily: 'Helvetica-Bold', marginBottom: 8 } }, 'Vraag nu uw vrijblijvende offerte aan'),
+        React.createElement(Text, { style: { color: '#D1D5DB', fontSize: 9, lineHeight: 1.6, marginBottom: 12 } },
+          scan.recommendationWhy
+            ?? 'Bezorg ons dit rapport en we stellen binnen 1 werkdag een persoonlijk aanbod op maat voor — zonder verbintenis.',
         ),
-        React.createElement(View, { style: { ...s.row, marginTop: 4 } },
-          React.createElement(Text, { style: { fontSize: 9, color: NAVY, fontFamily: 'Helvetica-Bold', width: 60 } }, 'Website'),
-          React.createElement(Text, { style: { fontSize: 9, color: '#374151' } }, 'www.rflct.be'),
-        ),
-        React.createElement(View, { style: { ...s.row, marginTop: 4 } },
-          React.createElement(Text, { style: { fontSize: 9, color: NAVY, fontFamily: 'Helvetica-Bold', width: 60 } }, 'Rapport voor'),
-          React.createElement(Text, { style: { fontSize: 9, color: '#374151' } }, scan.email),
+        React.createElement(View, { style: { flexDirection: 'row', gap: 24 } },
+          React.createElement(View, null,
+            React.createElement(Text, { style: { color: GOLD, fontSize: 7, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', letterSpacing: 0.5 } }, 'E-mail'),
+            React.createElement(Text, { style: { color: '#FFFFFF', fontSize: 10, marginTop: 2 } }, 'info@rflct.be'),
+          ),
+          React.createElement(View, null,
+            React.createElement(Text, { style: { color: GOLD, fontSize: 7, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', letterSpacing: 0.5 } }, 'Website'),
+            React.createElement(Text, { style: { color: '#FFFFFF', fontSize: 10, marginTop: 2 } }, 'www.rflct.be'),
+          ),
+          React.createElement(View, null,
+            React.createElement(Text, { style: { color: GOLD, fontSize: 7, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', letterSpacing: 0.5 } }, 'Scan-ID'),
+            React.createElement(Text, { style: { color: '#9CA3AF', fontSize: 9, marginTop: 2 } }, scan.id),
+          ),
         ),
       ),
     ),
