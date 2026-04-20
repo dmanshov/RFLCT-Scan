@@ -129,11 +129,8 @@ function scoreDim3(text: TextAnalysisResult): DimensionScore {
   );
 
   // Sub 3.2 — Onderscheidend karakter (max 7) — discrete: 0|3|5|7
-  const clicheIssues = text.cliches.length > 0
-    ? [`Clichés aangetroffen: "${text.cliches.slice(0, 2).join('", "')}"`]
-    : [];
   const s32 = sub('onderscheidend-karakter', 'Onderscheidend karakter', text.onderscheidendKarakter, 7,
-    text.onderscheidendKarakter < 5 ? [...clicheIssues, ...text.issues.filter(i => !s31.issues.includes(i)).slice(0, 1)] : clicheIssues,
+    text.onderscheidendKarakter < 5 ? text.issues.filter(i => !s31.issues.includes(i)).slice(0, 1) : [],
     text.onderscheidendKarakter >= 5 ? ['Authentieke en onderscheidende schrijfstijl.'] : [],
   );
 
