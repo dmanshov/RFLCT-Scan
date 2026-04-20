@@ -110,11 +110,11 @@ function extractPhotosOrdered(html: string): { photos: string[]; floorPlans: str
     (FLOOR_PLAN_RE.test(ctx) ? floorPlans : photos).push(url);
   }
 
-  // Pass 2: floor plan marker sweep — picks up URLs in "url"/"originalUrl" fields
-  // and any other URL field that isn't largeUrl
-  const fpMarkerRe = new RegExp(FLOOR_PLAN_RE.source, 'gi');
+  // Pass 2: look for "FLOOR_PLAN" as a quoted JSON value only — avoids matching
+  // "grondplan" in Dutch prose text which would cause false positives
+  const fpValueRe = /"(?:FLOOR_PLAN|floor[_\-]?plan)"/gi;
   let fp: RegExpExecArray | null;
-  while ((fp = fpMarkerRe.exec(searchable)) !== null) {
+  while ((fp = fpValueRe.exec(searchable)) !== null) {
     const ctx = searchable.slice(Math.max(0, fp.index - 800), fp.index + 800);
     for (const u of ctx.match(IMMOWEB_URL_RE) ?? []) {
       if (!seen.has(u)) {
@@ -265,6 +265,11 @@ function parseHtmlFallback(html: string, url: string, id: string): ImmowebListin
     html.match(/["'](?:epcScore|energyClass|epcLabel)["']\s*:\s*["']([A-G][+]{0,2})["']/i)
     ?? html.match(/\bEPC[:\s\-–]*([A-G][+]{0,2})\b/i);
 
+  const epcScoreMatch =
+    searchable.match(/"primaryEnergyConsumptionPerSqm"\s*:\s*(\d+)/)
+    ?? searchable.match(/"primaryEnergyConsumption"\s*:\s*(\d+)/);
+  const epcScore = epcScoreMatch ? parseInt(epcScoreMatch[1]) : null;
+
   const { photos, floorPlans } = extractPhotosOrdered(html);
   const dl = (description + ' ' + html.slice(0, 50_000)).toLowerCase();
 
@@ -280,7 +285,7 @@ function parseHtmlFallback(html: string, url: string, id: string): ImmowebListin
     postalCode: postalMatch?.[1] ?? '',
     photos,
     floorPlans,
-    epcScore: null,
+    epcScore,
     epcLabel: epcLabelMatch?.[1]?.toUpperCase() ?? null,
     area: areaMatch ? parseInt(areaMatch[1]) : null,
     bedrooms: bedroomMatch ? parseInt(bedroomMatch[1]) : null,
