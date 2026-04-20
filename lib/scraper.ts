@@ -215,13 +215,21 @@ function parseHtmlFallback(html: string, url: string, id: string): ImmowebListin
   const postalMatch = description.match(/\b(\d{4})\b/)
     ?? title.match(/\b(\d{4})\b/);
 
-  // Extract street from embedded JSON blob: "name":"Streetname","number":"12"
+  // Extract street from embedded JSON blob — try nested object, flat field, and plain string
   const searchable = html.replace(/\\\//g, '/');
-  const streetNameMatch = searchable.match(/"street"\s*:\s*\{[^}]*"name"\s*:\s*"([^"]+)"/);
-  const streetNumMatch  = searchable.match(/"street"\s*:\s*\{[^}]*"number"\s*:\s*"([^"]+)"/);
-  const htmlStreet: string | null = streetNameMatch
-    ? `${streetNameMatch[1]}${streetNumMatch ? ` ${streetNumMatch[1]}` : ''}`
+  const streetNameNested = searchable.match(/"street"\s*:\s*\{[^}]*"name"\s*:\s*"([^"]+)"/)?.[1];
+  const streetNameFlat   = searchable.match(/"streetName"\s*:\s*"([^"\\]+)"/)?.[1];
+  const streetNamePlain  = searchable.match(/"street"\s*:\s*"([^"\\]+)"/)?.[1];
+  const extractedStreetName = streetNameNested ?? streetNameFlat ?? streetNamePlain ?? null;
+
+  const streetNumNested = searchable.match(/"street"\s*:\s*\{[^}]*"number"\s*:\s*"([^"\\]+)"/)?.[1];
+  const streetNumFlat   = searchable.match(/"houseNumber"\s*:\s*"([^"\\]+)"/)?.[1];
+  const extractedStreetNum = streetNumNested ?? streetNumFlat ?? null;
+
+  const htmlStreet: string | null = extractedStreetName
+    ? `${extractedStreetName}${extractedStreetNum ? ` ${extractedStreetNum}` : ''}`
     : null;
+  console.info(`[scraper] Street: ${htmlStreet ?? 'not found'}`);
 
   // Extract construction year from embedded JSON blob
   const yearMatch = searchable.match(/"constructionYear"\s*:\s*(\d{4})/);
