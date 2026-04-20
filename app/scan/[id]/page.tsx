@@ -18,7 +18,9 @@ function PropertyHeader({ scan }: { scan: ScanRecord }) {
         <p className="text-brand-gold text-xs font-bold uppercase tracking-widest mb-1">Geanalyseerde advertentie</p>
         <h2 className="text-white font-bold text-lg mb-1">{listing.title || listing.url}</h2>
         <div className="flex flex-wrap gap-4 text-white/50 text-xs mt-2">
-          {listing.city && <span>📍 {listing.city} {listing.postalCode}</span>}
+          {(listing.city || listing.street) && (
+            <span>📍 {[listing.street, [listing.postalCode, listing.city].filter(Boolean).join(' ')].filter(Boolean).join(', ')}</span>
+          )}
           {listing.photos.length > 0 && <span>📸 {listing.photos.length} foto&apos;s</span>}
           {listing.epcLabel && <span>⚡ EPC {listing.epcLabel}{listing.epcScore ? ` · ${listing.epcScore} kWh/m²/jaar` : ''}</span>}
           {listing.stats.daysOnline !== null && <span>📅 {listing.stats.daysOnline} dagen online</span>}

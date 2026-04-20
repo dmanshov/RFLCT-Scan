@@ -153,6 +153,10 @@ function parseJsonApi(raw: any, url: string, id: string): ImmowebListing {
   const pubStr: string | null = raw?.publication?.publicationDate ?? raw?.publicationDate ?? null;
   if (pubStr) daysOnline = Math.floor((Date.now() - new Date(pubStr).getTime()) / 86_400_000);
 
+  const streetName: string = location?.street?.name ?? location?.streetName ?? '';
+  const streetNum: string = String(location?.street?.number ?? location?.houseNumber ?? '');
+  const street: string | null = streetName ? `${streetName}${streetNum ? ` ${streetNum}` : ''}` : null;
+
   const dl = description.toLowerCase();
   return {
     id: String(raw?.id ?? id),
@@ -161,6 +165,7 @@ function parseJsonApi(raw: any, url: string, id: string): ImmowebListing {
     description,
     price: transaction?.sale?.price ?? raw?.price?.mainValue ?? null,
     propertyType: property?.type ?? raw?.type ?? 'UNKNOWN',
+    street,
     city: location?.locality ?? location?.municipality ?? '',
     postalCode: String(location?.postalCode ?? ''),
     photos,
@@ -210,6 +215,14 @@ function parseHtmlFallback(html: string, url: string, id: string): ImmowebListin
   const postalMatch = description.match(/\b(\d{4})\b/)
     ?? title.match(/\b(\d{4})\b/);
 
+  // Extract street from embedded JSON blob: "name":"Streetname","number":"12"
+  const searchable = html.replace(/\\\//g, '/');
+  const streetNameMatch = searchable.match(/"street"\s*:\s*\{[^}]*"name"\s*:\s*"([^"]+)"/);
+  const streetNumMatch  = searchable.match(/"street"\s*:\s*\{[^}]*"number"\s*:\s*"([^"]+)"/);
+  const htmlStreet: string | null = streetNameMatch
+    ? `${streetNameMatch[1]}${streetNumMatch ? ` ${streetNumMatch[1]}` : ''}`
+    : null;
+
   const epcLabelMatch =
     html.match(/["'](?:epcScore|energyClass|epcLabel)["']\s*:\s*["']([A-G][+]{0,2})["']/i)
     ?? html.match(/\bEPC[:\s\-–]*([A-G][+]{0,2})\b/i);
@@ -224,6 +237,7 @@ function parseHtmlFallback(html: string, url: string, id: string): ImmowebListin
     description,
     price: priceMatch ? parseFloat(priceMatch[1].replace(/\./g, '').replace(',', '.')) || null : null,
     propertyType: title.split(' ')[0]?.toUpperCase() ?? 'UNKNOWN',
+    street: htmlStreet,
     city: cityMatch?.[1]?.trim() ?? '',
     postalCode: postalMatch?.[1] ?? '',
     photos,

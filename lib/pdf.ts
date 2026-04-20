@@ -90,7 +90,10 @@ function PageCover({ scan }: { scan: ScanRecord }) {
           ),
           React.createElement(View, { style: { ...s.row, marginBottom: 3 } },
             React.createElement(Text, { style: s.infoLabel }, 'Locatie'),
-            React.createElement(Text, { style: s.infoValue }, [listing.city, listing.postalCode].filter(Boolean).join(' ') || '—'),
+            React.createElement(Text, { style: s.infoValue }, [
+              listing.street,
+              [listing.postalCode, listing.city].filter(Boolean).join(' '),
+            ].filter(Boolean).join(', ') || '—'),
           ),
           React.createElement(View, { style: { ...s.row, marginBottom: 3 } },
             React.createElement(Text, { style: s.infoLabel }, "Foto's"),

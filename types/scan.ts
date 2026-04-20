@@ -12,6 +12,7 @@ export interface ImmowebListing {
   description: string;
   price: number | null;
   propertyType: string;
+  street: string | null;
   city: string;
   postalCode: string;
   photos: string[];
