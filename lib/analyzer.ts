@@ -332,9 +332,11 @@ Clichévoorbeelden: "lichtrijke woning", "riant perceel", "te bezoeken", "niet t
 
 CRITERIUM 3 — Call-to-action:
 Kies EXACT één waarde:
-- 5 = Expliciete, concrete CTA met urgentie ("Bel vandaag", "Plan uw bezoek via…")
-- 3 = Vage CTA aanwezig ("Neem contact op", "Interesse?")
+- 5 = Expliciete, concrete CTA met urgentie ("Bel vandaag", "Plan uw bezoek via…") OF een aankondiging van een bezoekdag / open huis / kijkdag / infomoment
+- 3 = Vage CTA aanwezig ("Neem contact op", "Interesse?") OF enkel "op afspraak" zonder verdere uitnodiging
 - 0 = Geen CTA
+
+REGEL: Als de tekst een bezoekdag, open huis, kijkdag of infomoment aankondigt → kies ALTIJD score 5 en zet GEEN CTA-issue in de issues-array.
 
 Geef enkel JSON terug:
 {

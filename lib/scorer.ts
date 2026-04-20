@@ -410,9 +410,25 @@ export function calculateScores(input: ScoringInput): {
 } {
   const { listing, photoAnalysis, textAnalysis } = input;
 
+  const URGENCY_RE = /bezoekdag|open\s*huis|open\s*house|bezoekmomenten?|kijkdag|infomoment|bezichtigingsdag|bezoek\s*mogelijk/;
+  const hasUrgency = URGENCY_RE.test(listing.description.toLowerCase());
+
+  // If an urgency trigger is present, ensure callToAction is scored 5 and any
+  // AI-generated CTA-critique issues are suppressed (temperature=0 should handle
+  // this via the prompt, but this is a deterministic safety net).
+  const effectiveText: TextAnalysisResult = hasUrgency && textAnalysis.callToAction < 5
+    ? {
+        ...textAnalysis,
+        callToAction: 5 as TextAnalysisResult['callToAction'],
+        issues: textAnalysis.issues.filter(
+          (i) => !/passief|mist urgentie|call.to.action|enkel op afspraak/i.test(i),
+        ),
+      }
+    : textAnalysis;
+
   const dim1 = scoreDim1(listing, photoAnalysis);
   const dim2 = scoreDim2(listing);
-  const dim3 = scoreDim3(textAnalysis);
+  const dim3 = scoreDim3(effectiveText);
   const dim4 = scoreDim4(listing);
   const dim5 = scoreDim5(listing);
 
