@@ -446,42 +446,16 @@ export function deriveRecommendation(
   _listing: ImmowebListing,
 ): { recommendation: Recommendation; recommendationWhy: string; recommendedMicros: string[] } {
   const d1 = breakdown.dim1.percentage;
-  const d3 = breakdown.dim3.percentage;
-  const d4 = breakdown.dim4.percentage;
 
-  // Fundamentele visuele + tekst/compliance-problemen tegelijk
-  if (d1 < 30 && (d3 < 50 || d4 < 50)) {
-    return {
-      recommendation: 'PRODUCTIE',
-      recommendationWhy: 'Tekortkomingen op meerdere vlakken tegelijk. Professionele fotografie, virtual staging en grondplan zijn de meest impactvolle ingrepen om de advertentie naar een competitief niveau te tillen.',
-      recommendedMicros: [],
-    };
-  }
-  // Zwakke visuele presentatie
+  // Zwakke visuele presentatie — productie is de kernoplossing
   if (d1 < 50) {
     return {
       recommendation: 'PRODUCTIE',
-      recommendationWhy: 'De visuele presentatie is de cruciale bottleneck. Professionele fotografie en grondplan leveren de grootste return op investering.',
+      recommendationWhy: 'De visuele presentatie is de cruciale bottleneck. Professionele fotografie, virtual staging en grondplan leveren de grootste return op investering.',
       recommendedMicros: [],
     };
   }
-  // Onvolledige wettelijke vermeldingen
-  if (d4 < 50) {
-    return {
-      recommendation: 'PRODUCTIE',
-      recommendationWhy: 'Wettelijke vermeldingen zijn onvolledig. RFLCT Productie zorgt voor een volledige heraanpak van de presentatie en dicht tegelijk de compliance-lacunes.',
-      recommendedMicros: [],
-    };
-  }
-  // Zwakke advertentietekst
-  if (d3 < 45) {
-    return {
-      recommendation: 'PRODUCTIE',
-      recommendationWhy: 'De advertentietekst overtuigt onvoldoende. RFLCT Productie tilt de volledige presentatie naar professioneel niveau en compenseert de tekstuele zwaktes met sterke visuals.',
-      recommendedMicros: [],
-    };
-  }
-  // Solide advertentie — gerichte losse diensten volstaan
+  // Foto's scoren goed, solide advertentie — gerichte losse diensten volstaan
   if (total >= 65) {
     const micros = selectMicroServices(breakdown);
     return {
@@ -490,9 +464,10 @@ export function deriveRecommendation(
       recommendedMicros: micros,
     };
   }
+  // Foto's scoren goed — boost zichtbaarheid
   return {
     recommendation: 'ONLINE',
-    recommendationWhy: 'Een goede basis aanwezig. Meer zichtbaarheid via AI-retouche, RFLCT-webpagina en social media is de logische volgende stap.',
+    recommendationWhy: "De foto's scoren goed. Meer zichtbaarheid via AI-retouche, RFLCT-webpagina en social media is de logische volgende stap.",
     recommendedMicros: [],
   };
 }
