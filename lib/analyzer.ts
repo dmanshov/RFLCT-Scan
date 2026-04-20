@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import axios from 'axios';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const SCRAPER_KEY = process.env.SCRAPER_API_KEY ?? '';
 
 // ─── Result interfaces ─────────────────────────────────────────────────────
 
@@ -77,19 +78,46 @@ type Base64Block = {
 };
 
 async function downloadAsBase64(url: string): Promise<Base64Block | null> {
+  // Attempt 1: direct download with realistic browser headers
   try {
     const res = await axios.get<ArrayBuffer>(url, {
       responseType: 'arraybuffer',
-      timeout: 15_000,
+      timeout: 12_000,
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36',
-        Referer: 'https://www.immoweb.be/',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'image/webp,image/apng,image/*,*/*;q=0.8',
+        'Accept-Language': 'nl-BE,nl;q=0.9',
+        'Referer': 'https://www.immoweb.be/',
+        'Sec-Fetch-Dest': 'image',
+        'Sec-Fetch-Mode': 'no-cors',
+        'Sec-Fetch-Site': 'cross-site',
       },
     });
-    const b64 = Buffer.from(res.data as ArrayBuffer).toString('base64');
+    const buf = res.data as ArrayBuffer;
+    if (buf.byteLength < 500) throw new Error('too small');
     const ct = (res.headers['content-type'] as string | undefined) ?? 'image/jpeg';
     const mediaType = ct.split(';')[0].trim() as Base64Block['source']['media_type'];
-    return { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } };
+    if (!mediaType.startsWith('image/')) throw new Error('not an image');
+    return { type: 'image', source: { type: 'base64', media_type: mediaType, data: Buffer.from(buf).toString('base64') } };
+  } catch {
+    // intentional fall-through to ScraperAPI
+  }
+
+  // Attempt 2: proxy via ScraperAPI (same key used for HTML scraping)
+  if (!SCRAPER_KEY) return null;
+  try {
+    const scraperUrl = `https://api.scraperapi.com/?api_key=${SCRAPER_KEY}&url=${encodeURIComponent(url)}&render=false`;
+    const res = await axios.get<ArrayBuffer>(scraperUrl, {
+      responseType: 'arraybuffer',
+      timeout: 20_000,
+    });
+    const buf = res.data as ArrayBuffer;
+    if (buf.byteLength < 500) return null;
+    const ct = (res.headers['content-type'] as string | undefined) ?? 'image/jpeg';
+    const mediaType = ct.split(';')[0].trim() as Base64Block['source']['media_type'];
+    if (!mediaType.startsWith('image/')) return null;
+    console.info(`[analyzer] Photo via ScraperAPI: ${url.slice(-40)}`);
+    return { type: 'image', source: { type: 'base64', media_type: mediaType, data: Buffer.from(buf).toString('base64') } };
   } catch {
     return null;
   }
@@ -111,10 +139,22 @@ export async function analyzePhotos(photoUrls: string[]): Promise<PhotoAnalysisR
   const urls = photoUrls.slice(0, 10);
   const downloaded = await Promise.all(urls.map(downloadAsBase64));
   const imageBlocks: Anthropic.ImageBlockParam[] = downloaded.filter((b): b is Base64Block => b !== null);
+  console.info(`[analyzer] Photos: ${photoUrls.length} total, ${urls.length} attempted, ${imageBlocks.length} loaded`);
+
+  // If no photos could be loaded, return a clear fallback (don't let Claude hallucinate)
+  if (imageBlocks.length === 0) {
+    return {
+      belichting: 0, perspectief: 0, witbalans: 0, scherpte: 0, consistentie: 0,
+      qualityTotal: 0,
+      sequenceScore: 0, openingsFoto: 'Foto\'s konden niet worden geladen', eersteZwakkePositie: null, logicalFlow: false,
+      issues: [`${photoUrls.length} foto('s) gevonden maar niet laadbaar (CDN-blokkade). Fotokwaliteit kon niet worden beoordeeld.`],
+      strengths: [],
+    };
+  }
 
   const response = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
-    max_tokens: 1200,
+    max_tokens: 1400,
     messages: [
       {
         role: 'user',
@@ -122,23 +162,37 @@ export async function analyzePhotos(photoUrls: string[]): Promise<PhotoAnalysisR
           ...imageBlocks,
           {
             type: 'text',
-            text: `Je bent expert vastgoedfotograaf. Analyseer deze ${imageBlocks.length} foto('s) van een Immoweb-advertentie.
+            text: `Je bent expert vastgoedfotograaf. Je analyseert de EERSTE ${imageBlocks.length} foto's (van ${photoUrls.length} totaal) van een Immoweb-advertentie, IN VOLGORDE (foto 1 = eerste in de advertentie, foto ${imageBlocks.length} = laatste van deze selectie).
 
-DEEL A — Technische kwaliteit (beoordeel alle foto's samen):
-Gebruik uitsluitend de waarden 0, 1, 2 of 3.
-| Aspect       | 0 = onvoldoende        | 1 = matig              | 2 = goed              | 3 = uitstekend         |
-|--------------|------------------------|------------------------|-----------------------|------------------------|
-| belichting   | Donker of overbelicht  | Merkbaar te licht/donk | Grotendeels correct   | Perfect belicht        |
-| perspectief  | Scheef, crop slecht    | Enigszins scheef       | Rechte lijnen, goed   | Professioneel hoek     |
-| witbalans    | Sterk kleurzweem       | Lichte kleurzweem      | Naturale kleuren      | Perfecte witbalans     |
-| scherpte     | Wazig of onscherp      | Deels onscherp         | Grotendeels scherp    | Pixel-scherp           |
-| consistentie | Heel wisselend stijl   | Enige inconsistentie   | Grotendeels coherent  | Uniforme presentatie   |
+STAP 1 — Ruimte-identificatie (voor je eigen analyse, verschijnt NIET in JSON):
+Noteer intern voor elke foto het ruimtetype: exterieur/gevel, tuin/terras, hal/inkomhal, living/woonkamer, keuken, eetkamer, slaapkamer, badkamer, bureau/werkkamer, bergruimte/kelder, garage, of detail/overig.
 
-DEEL B — Narratieve volgorde:
-Ideale volgorde: gevel → inkomhal → woonkamer → keuken → slaapkamers → badkamer → tuin/terras → garage/kelder
-Kies EXACT één waarde: 10 (logisch + compleet), 7 (logisch maar incompleet), 4 (gedeeltelijk logisch), 1 (één duidelijke fout), 0 (chaotisch)
+STAP 2 — Technische kwaliteit (beoordeel alle ${imageBlocks.length} foto's samen):
+Gebruik UITSLUITEND 0, 1, 2 of 3.
+| Aspect       | 0 = onvoldoende         | 1 = matig               | 2 = goed               | 3 = uitstekend          |
+|--------------|-------------------------|-------------------------|------------------------|-------------------------|
+| belichting   | Donker of overbelicht   | Merkbaar te licht/donker| Grotendeels correct    | Perfect belicht         |
+| perspectief  | Scheef, slechte crop    | Enigszins scheef        | Rechte lijnen, goed    | Professioneel hoek      |
+| witbalans    | Sterke kleurzweem       | Lichte kleurzweem       | Naturale kleuren       | Perfecte witbalans      |
+| scherpte     | Wazig of onscherp       | Deels onscherp          | Grotendeels scherp     | Pixel-scherp            |
+| consistentie | Sterk wisselende stijl  | Enige inconsistentie    | Grotendeels coherent   | Uniforme presentatie    |
 
-Geef enkel JSON terug:
+STAP 3 — Narratieve volgorde (gebaseerd op ruimte-identificatie uit Stap 1):
+Ideale volgorde: exterieur/gevel → hal → living/woonkamer → keuken/eetkamer → slaapkamers → badkamer(s) → tuin/terras → garage/kelder
+
+Kies EXACT één waarde:
+- 10 = Volgt ideale volgorde volledig, exterieur als openingsfoto
+- 7 = Logisch maar niet volledig (ontbrekende ruimte in selectie of geen exterieur als opening)
+- 4 = Gedeeltelijk logisch, merkbare volgorde-fouten
+- 1 = Één duidelijke volgorde-fout (bijv. woonkamer vóór exterieur)
+- 0 = Chaotisch, geen logische structuur
+
+BELANGRIJK voor issues/strengths:
+- Vermeld ALLEEN technische kwaliteitsproblemen of concrete volgorde-fouten (bijv. "Keuken verschijnt vóór woonkamer")
+- Meld NOOIT ontbrekende ruimtetypes — je ziet slechts ${imageBlocks.length} van ${photoUrls.length} foto's, de andere ruimtes kunnen in de overige foto's staan
+- Max 3 issues, max 2 strengths — elk concreet en max 1 zin
+
+Geef ENKEL JSON terug:
 {
   "belichting": 0-3,
   "perspectief": 0-3,
@@ -146,11 +200,11 @@ Geef enkel JSON terug:
   "scherpte": 0-3,
   "consistentie": 0-3,
   "sequenceScore": 0|1|4|7|10,
-  "openingsFoto": "beschrijving van de eerste foto",
-  "eersteZwakkePositie": null of 0-gebaseerde index,
+  "openingsFoto": "beschrijving van wat de eerste foto toont",
+  "eersteZwakkePositie": null of 0-gebaseerde index van eerste volgorde-fout,
   "logicalFlow": true/false,
-  "issues": ["max 3 concrete tekortkomingen"],
-  "strengths": ["max 2 concrete sterktes"]
+  "issues": ["concrete kwaliteits- of volgorde-tekortkoming"],
+  "strengths": ["concrete sterkte"]
 }`,
           },
         ],
