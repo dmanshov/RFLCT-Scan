@@ -213,24 +213,23 @@ function scoreDim4(listing: ImmowebListing): DimensionScore {
 }
 
 function scoreDim5(listing: ImmowebListing): DimensionScore {
-  const hasName  = !!listing.agencyName;
-  const hasPhone = !!listing.agencyPhone;
-  const hasEmail = !!listing.agencyEmail;
-
-  const s51 = sub('contact-naam', 'Naam contactpersoon', hasName ? 3 : 0, 3,
-    !hasName ? ['Naam van contactpersoon niet gevonden — anonimiteit verlaagt het vertrouwen bij kopers.'] : [],
-    hasName ? [`Contactpersoon: ${listing.agencyName}.`] : [],
-  );
-  const s52 = sub('contact-telefoon', 'Telefoonnummer', hasPhone ? 4 : 0, 4,
-    !hasPhone ? ['Telefoonnummer ontbreekt — kopers die liever bellen haken af.'] : [],
-    hasPhone ? [`Telefoon: ${listing.agencyPhone}.`] : [],
-  );
-  const s53 = sub('contact-email', 'E-mailadres', hasEmail ? 3 : 0, 3,
-    !hasEmail ? ['E-mailadres ontbreekt — geeft kopers het gevoel van controle bij eerste contact.'] : [],
-    hasEmail ? [`E-mail: ${listing.agencyEmail}.`] : [],
+  // Sub 5.1 — Direct contactgegeven (max 4) — Immoweb biedt altijd een contactformulier,
+  // maar een direct nummer of e-mail verlaagt de drempel verder.
+  const hasDirectContact = !!listing.agencyPhone || !!listing.agencyEmail;
+  const s51 = sub('contact-direct', 'Direct contactgegeven', hasDirectContact ? 4 : 0, 4,
+    !hasDirectContact ? ['Geen direct telefoonnummer of e-mailadres — kopers die buiten het Immoweb-formulier willen communiceren, kunnen u niet bereiken.'] : [],
+    hasDirectContact ? ['Direct contactgegeven (telefoon en/of e-mail) aanwezig.'] : [],
   );
 
-  return buildDim('dim5', 'Contact & conversie', 10, [s51, s52, s53]);
+  // Sub 5.2 — Urgentie-trigger (max 6) — een concrete uitnodiging zoals een bezoekdag
+  const dl = listing.description.toLowerCase();
+  const hasUrgency = /bezoekdag|open\s*huis|open\s*house|bezoekmomenten?|kijkdag|infomoment|bezichtigingsdag|bezoek\s*mogelijk/.test(dl);
+  const s52 = sub('urgentie-trigger', 'Urgentie-trigger', hasUrgency ? 6 : 0, 6,
+    !hasUrgency ? ['Geen bezoekdag of urgentie-trigger vermeld — een concrete uitnodiging ("bezoekdag op...") verhoogt de respons aanzienlijk.'] : [],
+    hasUrgency ? ['Urgentie-trigger aanwezig (bezoekdag of gelijkwaardige uitnodiging).'] : [],
+  );
+
+  return buildDim('dim5', 'Contact & conversie', 10, [s51, s52]);
 }
 
 // ─── Consistency check ─────────────────────────────────────────────────────
@@ -312,20 +311,15 @@ const KERN: Record<string, KernBevinding> = {
     impact: "Het niet vermelden van P- en G-score is een wettelijke overtreding in Vlaanderen.",
     strategischeLezing: "Vermeld de overstromingsgevoeligheid conform gewestelijke regelgeving.",
   },
-  'contact-naam': {
-    wat: 'Naam contactpersoon ontbreekt',
-    impact: "Anonimiteit verlaagt het vertrouwen bij kopers die direct persoonlijk contact wensen.",
-    strategischeLezing: "Een persoonsnaam maakt de interactie menselijker en verhoogt de respons.",
+  'contact-direct': {
+    wat: 'Geen direct contactgegeven',
+    impact: "Kopers die buiten het Immoweb-formulier willen communiceren, vinden geen direct nummer of e-mailadres.",
+    strategischeLezing: "Een zichtbaar telefoonnummer of e-mailadres verlaagt de drempel en verhoogt de kans op een snel eerste contact.",
   },
-  'contact-telefoon': {
-    wat: 'Telefoonnummer ontbreekt',
-    impact: "Kopers die liever bellen dan een formulier invullen, haken af bij gebrek aan direct nummer.",
-    strategischeLezing: "Een direct telefoonnummer is de snelste brug naar een bezichtigingsafspraak.",
-  },
-  'contact-email': {
-    wat: 'E-mailadres ontbreekt',
-    impact: "Kopers die liever schrijven missen een directe contactmogelijkheid.",
-    strategischeLezing: "Een zichtbaar e-mailadres geeft kopers het gevoel van controle bij het eerste contactmoment.",
+  'urgentie-trigger': {
+    wat: 'Geen urgentie-trigger in de tekst',
+    impact: "Zonder een concrete uitnodiging weten geïnteresseerde kopers niet wanneer of hoe ze de woning kunnen bezichtigen.",
+    strategischeLezing: 'Vermeld een bezoekdag of open huis ("bezoekdag op zaterdag X, bel voor een afspraak") — dit verhoogt de respons meetbaar.',
   },
 };
 
