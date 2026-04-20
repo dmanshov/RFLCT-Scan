@@ -9,250 +9,344 @@ import {
   renderToBuffer,
   type DocumentProps,
 } from '@react-pdf/renderer';
-import type { ScanRecord } from '@/types/scan';
+import type { ScanRecord, DimensionScore, SubScore, KernBevinding } from '@/types/scan';
+import { PACKAGES, MICRO_SERVICES } from '@/types/scan';
 
 Font.register({ family: 'Helvetica', src: 'Helvetica' });
 
-const NAVY = '#0F1B2D';
-const GOLD = '#C9A050';
-const GRAY = '#6B7280';
+const NAVY  = '#0F1B2D';
+const GOLD  = '#C9A050';
+const GRAY  = '#6B7280';
 const LIGHT = '#F8F7F4';
-const RED = '#EF4444';
+const RED   = '#EF4444';
 const GREEN = '#22C55E';
-const ORANGE = '#F97316';
+const ORANGE= '#F97316';
 
-const styles = StyleSheet.create({
-  page: { backgroundColor: '#FFFFFF', fontFamily: 'Helvetica', fontSize: 10, color: '#111827', paddingBottom: 40 },
-  header: { backgroundColor: NAVY, padding: '24 40', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  headerTitle: { color: GOLD, fontSize: 18, fontFamily: 'Helvetica-Bold', letterSpacing: 1 },
-  headerSub: { color: '#9CA3AF', fontSize: 9, marginTop: 2 },
-  section: { marginHorizontal: 40, marginTop: 20 },
-  sectionTitle: { fontSize: 8, textTransform: 'uppercase', letterSpacing: 1, color: GRAY, marginBottom: 8, fontFamily: 'Helvetica-Bold' },
-  scoreBox: { backgroundColor: NAVY, borderRadius: 8, padding: '20 32', flexDirection: 'row', alignItems: 'center', gap: 24 },
-  scoreNumber: { color: '#FFFFFF', fontSize: 52, fontFamily: 'Helvetica-Bold', lineHeight: 1 },
-  scoreOutOf: { color: GOLD, fontSize: 20 },
-  scoreLabel: { color: '#9CA3AF', fontSize: 9, marginTop: 4 },
-  recommendationBadge: { backgroundColor: GOLD, borderRadius: 4, paddingHorizontal: 10, paddingVertical: 4, alignSelf: 'flex-start' },
-  recommendationText: { color: NAVY, fontSize: 10, fontFamily: 'Helvetica-Bold' },
-  indicatorRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, backgroundColor: LIGHT, borderRadius: 6, padding: '8 12' },
-  indicatorName: { flex: 3, fontSize: 10, fontFamily: 'Helvetica-Bold' },
-  indicatorBar: { flex: 5, height: 6, backgroundColor: '#E5E7EB', borderRadius: 3, marginHorizontal: 12 },
-  indicatorScore: { flex: 1, fontSize: 10, textAlign: 'right' },
-  indicatorDetail: { marginHorizontal: 40, marginBottom: 10, paddingHorizontal: 12 },
-  feedbackItem: { flexDirection: 'row', gap: 5, marginBottom: 3 },
-  feedbackBullet: { fontSize: 9, width: 10, fontFamily: 'Helvetica-Bold' },
-  feedbackText: { fontSize: 9, flex: 1, lineHeight: 1.4 },
-  workpointItem: { flexDirection: 'row', marginBottom: 6, gap: 6 },
-  bullet: { fontSize: 10, color: GOLD, fontFamily: 'Helvetica-Bold' },
-  workpointText: { fontSize: 10, flex: 1, lineHeight: 1.5 },
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: NAVY, padding: '12 40', flexDirection: 'row', justifyContent: 'space-between' },
-  footerText: { color: '#9CA3AF', fontSize: 8 },
-  infoRow: { flexDirection: 'row', gap: 8, marginBottom: 4 },
-  infoLabel: { color: GRAY, fontSize: 9, width: 90 },
-  infoValue: { fontSize: 9, flex: 1 },
+const s = StyleSheet.create({
+  page:          { backgroundColor: '#FFFFFF', fontFamily: 'Helvetica', fontSize: 10, color: '#111827', paddingBottom: 44 },
+  header:        { backgroundColor: NAVY, padding: '22 40', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  headerTitle:   { color: GOLD, fontSize: 18, fontFamily: 'Helvetica-Bold', letterSpacing: 1 },
+  headerSub:     { color: '#9CA3AF', fontSize: 9, marginTop: 2 },
+  footer:        { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: NAVY, padding: '10 40', flexDirection: 'row', justifyContent: 'space-between' },
+  footerText:    { color: '#9CA3AF', fontSize: 8 },
+  section:       { marginHorizontal: 40, marginTop: 18 },
+  sectionTitle:  { fontSize: 8, textTransform: 'uppercase', letterSpacing: 1, color: GRAY, marginBottom: 8, fontFamily: 'Helvetica-Bold' },
+  card:          { backgroundColor: LIGHT, borderRadius: 6, padding: '10 14', marginBottom: 6 },
+  row:           { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  infoLabel:     { color: GRAY, fontSize: 9, width: 80 },
+  infoValue:     { fontSize: 9, flex: 1 },
 });
 
-function verdictColor(verdict: string) {
-  if (verdict === 'good') return GREEN;
-  if (verdict === 'average') return ORANGE;
-  return RED;
+function verdictColor(v: string) {
+  return v === 'good' ? GREEN : v === 'average' ? ORANGE : RED;
 }
 
-function ScoreGaugePdf({ score }: { score: number }) {
-  const color = score >= 70 ? GREEN : score >= 50 ? ORANGE : RED;
-  return React.createElement(
-    View,
-    { style: { alignItems: 'center', justifyContent: 'center', width: 120, height: 120, borderRadius: 60, backgroundColor: NAVY } },
-    React.createElement(Text, { style: { color, fontSize: 36, fontFamily: 'Helvetica-Bold', lineHeight: 1 } }, `${score}`),
-    React.createElement(Text, { style: { color: '#9CA3AF', fontSize: 11, marginTop: 2 } }, '/ 100'),
+function Footer({ email }: { email: string }) {
+  return React.createElement(View, { style: s.footer, fixed: true },
+    React.createElement(Text, { style: s.footerText }, 'RFLCT · www.rflct.be · info@rflct.be'),
+    React.createElement(Text, { style: s.footerText }, `Vertrouwelijk · ${email}`),
   );
 }
 
-function RflctDocument({ scan }: { scan: ScanRecord }) {
+// ─── Blok 1+2: Cover + Interpretatietekst ─────────────────────────────────
+
+function PageCover({ scan }: { scan: ScanRecord }) {
   const listing = scan.listing!;
-  const breakdown = scan.scores!;
-  const total = scan.totalScore ?? 0;
-  const rec = scan.recommendation ?? 'ONLINE';
-  const workPoints = scan.workPoints ?? [];
-
-  const recLabels: Record<string, string> = {
-    PRODUCTIE: 'Productie Pakket aanbevolen',
-    BASIS: 'Basis Pakket aanbevolen',
-    ONLINE: 'Online Pakket aanbevolen',
-    MICRO: 'Micro-diensten aanbevolen',
-    PERFECT: 'Kwalitatieve scan — verdere optimalisatie mogelijk',
+  const total   = scan.totalScore ?? 0;
+  const rec     = scan.recommendation ?? 'ONLINE';
+  const recNames: Record<string, string> = {
+    COMPLEET: 'RFLCT Compleet aanbevolen',
+    PRODUCTIE:'RFLCT Productie aanbevolen',
+    BASIS:    'RFLCT Basis aanbevolen',
+    ONLINE:   'RFLCT Online aanbevolen',
+    MICRO:    'Gerichte micro-diensten aanbevolen',
   };
+  const scoreColor = total >= 70 ? GREEN : total >= 50 ? ORANGE : RED;
 
-  const indicators = Object.values(breakdown);
-
-  return React.createElement(Document, { title: `RFLCT Advertentie-scan — ${listing.title || listing.url}` },
-    // PAGE 1 — Score overview + indicator summary
-    React.createElement(Page, { size: 'A4', style: styles.page },
-      React.createElement(View, { style: styles.header },
-        React.createElement(View, null,
-          React.createElement(Text, { style: styles.headerTitle }, 'RFLCT'),
-          React.createElement(Text, { style: styles.headerSub }, 'Advertentie-scan Rapport'),
-        ),
-        React.createElement(Text, { style: { color: '#9CA3AF', fontSize: 9 } }, new Date(scan.createdAt).toLocaleDateString('nl-BE')),
+  return React.createElement(Page, { size: 'A4', style: s.page },
+    // Header
+    React.createElement(View, { style: s.header },
+      React.createElement(View, null,
+        React.createElement(Text, { style: s.headerTitle }, 'RFLCT'),
+        React.createElement(Text, { style: s.headerSub }, 'Advertentie-scan Rapport'),
       ),
+      React.createElement(Text, { style: { color: '#9CA3AF', fontSize: 9 } }, new Date(scan.createdAt).toLocaleDateString('nl-BE')),
+    ),
 
-      // Property info
-      React.createElement(View, { style: styles.section },
-        React.createElement(Text, { style: styles.sectionTitle }, 'Advertentie'),
-        React.createElement(View, { style: { backgroundColor: LIGHT, borderRadius: 6, padding: '10 12' } },
-          React.createElement(View, { style: styles.infoRow },
-            React.createElement(Text, { style: styles.infoLabel }, 'Titel'),
-            React.createElement(Text, { style: { ...styles.infoValue, fontFamily: 'Helvetica-Bold' } }, listing.title || '—'),
-          ),
-          React.createElement(View, { style: styles.infoRow },
-            React.createElement(Text, { style: styles.infoLabel }, 'URL'),
-            React.createElement(Text, { style: { ...styles.infoValue, color: GRAY } }, listing.url),
-          ),
-          React.createElement(View, { style: styles.infoRow },
-            React.createElement(Text, { style: styles.infoLabel }, 'Locatie'),
-            React.createElement(Text, { style: styles.infoValue }, [listing.city, listing.postalCode].filter(Boolean).join(' ') || '—'),
-          ),
-          React.createElement(View, { style: styles.infoRow },
-            React.createElement(Text, { style: styles.infoLabel }, "Foto's"),
-            React.createElement(Text, { style: styles.infoValue }, `${listing.photos.length}`),
-          ),
+    // Blok 1 — Advertentie-info + score
+    React.createElement(View, { style: s.section },
+      React.createElement(Text, { style: s.sectionTitle }, 'Blok 1 — Advertentie & Totaalscore'),
+      React.createElement(View, { style: { ...s.card, flexDirection: 'row', alignItems: 'flex-start', gap: 20 } },
+        // Score cirkel
+        React.createElement(View, { style: { width: 90, height: 90, borderRadius: 45, backgroundColor: NAVY, alignItems: 'center', justifyContent: 'center' } },
+          React.createElement(Text, { style: { color: scoreColor, fontSize: 32, fontFamily: 'Helvetica-Bold', lineHeight: 1 } }, `${total}`),
+          React.createElement(Text, { style: { color: '#9CA3AF', fontSize: 10, marginTop: 2 } }, '/ 100'),
         ),
-      ),
-
-      // Score
-      React.createElement(View, { style: styles.section },
-        React.createElement(Text, { style: styles.sectionTitle }, 'Totaalscore'),
-        React.createElement(View, { style: styles.scoreBox },
-          React.createElement(ScoreGaugePdf, { score: total }),
-          React.createElement(View, null,
-            React.createElement(Text, { style: { color: '#FFFFFF', fontSize: 11, marginBottom: 6 } }, listing.title || listing.url),
-            React.createElement(View, { style: styles.recommendationBadge },
-              React.createElement(Text, { style: styles.recommendationText }, recLabels[rec]),
-            ),
-            React.createElement(Text, { style: styles.scoreLabel }, `Scan uitgevoerd op ${new Date(scan.createdAt).toLocaleDateString('nl-BE')}`),
+        // Info
+        React.createElement(View, { style: { flex: 1 } },
+          React.createElement(Text, { style: { fontFamily: 'Helvetica-Bold', fontSize: 12, marginBottom: 4 } }, listing.title || listing.url),
+          React.createElement(View, { style: { backgroundColor: GOLD, borderRadius: 3, paddingHorizontal: 8, paddingVertical: 3, alignSelf: 'flex-start', marginBottom: 8 } },
+            React.createElement(Text, { style: { color: NAVY, fontSize: 9, fontFamily: 'Helvetica-Bold' } }, recNames[rec] ?? rec),
+          ),
+          React.createElement(View, { style: { ...s.row, marginBottom: 3 } },
+            React.createElement(Text, { style: s.infoLabel }, 'Locatie'),
+            React.createElement(Text, { style: s.infoValue }, [listing.city, listing.postalCode].filter(Boolean).join(' ') || '—'),
+          ),
+          React.createElement(View, { style: { ...s.row, marginBottom: 3 } },
+            React.createElement(Text, { style: s.infoLabel }, "Foto's"),
+            React.createElement(Text, { style: s.infoValue }, `${listing.photos.length}`),
+          ),
+          React.createElement(View, { style: { ...s.row, marginBottom: 3 } },
+            React.createElement(Text, { style: s.infoLabel }, 'EPC'),
+            React.createElement(Text, { style: s.infoValue }, listing.epcLabel ? `${listing.epcLabel}${listing.epcScore ? ` · ${listing.epcScore} kWh/m²/jaar` : ''}` : '—'),
+          ),
+          React.createElement(View, { style: s.row },
+            React.createElement(Text, { style: s.infoLabel }, 'URL'),
+            React.createElement(Text, { style: { ...s.infoValue, color: GRAY, fontSize: 8 } }, listing.url),
           ),
         ),
-      ),
-
-      // Indicator bars
-      React.createElement(View, { style: styles.section },
-        React.createElement(Text, { style: styles.sectionTitle }, 'Scorekaart per indicator'),
-        ...indicators.map((ind) =>
-          React.createElement(View, { key: ind.key, style: styles.indicatorRow },
-            React.createElement(Text, { style: styles.indicatorName }, ind.label),
-            React.createElement(View, { style: styles.indicatorBar },
-              React.createElement(View, { style: { height: 6, borderRadius: 3, backgroundColor: verdictColor(ind.verdict), width: `${ind.percentage}%` } }),
-            ),
-            React.createElement(Text, { style: { ...styles.indicatorScore, color: verdictColor(ind.verdict) } }, `${ind.score}/${ind.maxScore}`),
-          ),
-        ),
-      ),
-
-      React.createElement(View, { style: styles.footer, fixed: true },
-        React.createElement(Text, { style: styles.footerText }, 'RFLCT · www.rflct.be · info@rflct.be'),
-        React.createElement(Text, { style: styles.footerText }, `Vertrouwelijk · ${scan.email}`),
       ),
     ),
 
-    // PAGE 2 — Detailed per-indicator feedback
-    React.createElement(Page, { size: 'A4', style: styles.page },
-      React.createElement(View, { style: styles.header },
-        React.createElement(Text, { style: styles.headerTitle }, 'RFLCT · Gedetailleerde Feedback'),
-      ),
-
-      React.createElement(View, { style: { ...styles.section, marginBottom: 0 } },
-        React.createElement(Text, { style: styles.sectionTitle }, 'Feedback per indicator'),
-      ),
-
-      ...indicators.map((ind) =>
-        React.createElement(View, { key: ind.key, style: { marginHorizontal: 40, marginTop: 12 } },
-          // Indicator header row
-          React.createElement(View, { style: { flexDirection: 'row', alignItems: 'center', backgroundColor: LIGHT, borderRadius: 6, padding: '7 12', marginBottom: 4 } },
-            React.createElement(Text, { style: { flex: 1, fontSize: 10, fontFamily: 'Helvetica-Bold' } }, ind.label),
-            React.createElement(View, { style: { flex: 3, height: 5, backgroundColor: '#E5E7EB', borderRadius: 3, marginHorizontal: 12 } },
-              React.createElement(View, { style: { height: 5, borderRadius: 3, backgroundColor: verdictColor(ind.verdict), width: `${ind.percentage}%` } }),
-            ),
-            React.createElement(Text, { style: { fontSize: 10, color: verdictColor(ind.verdict), fontFamily: 'Helvetica-Bold', minWidth: 36, textAlign: 'right' } }, `${ind.score}/${ind.maxScore}`),
+    // Blok 2 — Interpretatietekst
+    scan.interpretatieText
+      ? React.createElement(View, { style: s.section },
+          React.createElement(Text, { style: s.sectionTitle }, 'Blok 2 — Interpretatie'),
+          React.createElement(View, { style: { ...s.card, borderLeft: `3 solid ${GOLD}` } },
+            React.createElement(Text, { style: { fontSize: 10, lineHeight: 1.6, color: '#374151' } }, scan.interpretatieText),
           ),
-          // Issues
-          ...ind.issues.map((issue: string, i: number) =>
-            React.createElement(View, { key: `issue-${i}`, style: { ...styles.feedbackItem, paddingLeft: 12 } },
-              React.createElement(Text, { style: { ...styles.feedbackBullet, color: RED } }, '✗'),
-              React.createElement(Text, { style: styles.feedbackText }, issue),
-            ),
-          ),
-          // Strengths
-          ...ind.strengths.map((str: string, i: number) =>
-            React.createElement(View, { key: `str-${i}`, style: { ...styles.feedbackItem, paddingLeft: 12 } },
-              React.createElement(Text, { style: { ...styles.feedbackBullet, color: GREEN } }, '✓'),
-              React.createElement(Text, { style: styles.feedbackText }, str),
-            ),
-          ),
-          // Fallback when no feedback
-          (ind.issues.length === 0 && ind.strengths.length === 0)
-            ? React.createElement(View, { style: { ...styles.feedbackItem, paddingLeft: 12 } },
-                React.createElement(Text, { style: { ...styles.feedbackBullet, color: GREEN } }, '✓'),
-                React.createElement(Text, { style: styles.feedbackText }, 'Geen opmerkingen — deze indicator scoort optimaal.'),
-              )
-            : null,
-        ),
-      ),
+        )
+      : null,
 
-      React.createElement(View, { style: styles.footer, fixed: true },
-        React.createElement(Text, { style: styles.footerText }, 'RFLCT · www.rflct.be · info@rflct.be'),
-        React.createElement(Text, { style: styles.footerText }, `Vertrouwelijk · ${scan.email}`),
+    // Aanbeveling toelichting
+    scan.recommendationWhy
+      ? React.createElement(View, { style: s.section },
+          React.createElement(Text, { style: s.sectionTitle }, 'Aanbeveling — toelichting'),
+          React.createElement(View, { style: s.card },
+            React.createElement(Text, { style: { fontSize: 10, lineHeight: 1.5, color: '#374151' } }, scan.recommendationWhy),
+          ),
+        )
+      : null,
+
+    Footer({ email: scan.email }),
+  );
+}
+
+// ─── Blok 3: Scorekaart ─────────────────────────────────────────────────────
+
+function DimRow({ dim }: { dim: DimensionScore }) {
+  const color = verdictColor(dim.verdict);
+  return React.createElement(View, { style: { marginBottom: 10 } },
+    // Dim header
+    React.createElement(View, { style: { ...s.row, backgroundColor: NAVY, borderRadius: 5, padding: '6 10', marginBottom: 4 } },
+      React.createElement(Text, { style: { flex: 1, color: '#FFFFFF', fontSize: 10, fontFamily: 'Helvetica-Bold' } }, dim.label),
+      React.createElement(View, { style: { flex: 3, height: 6, backgroundColor: '#374151', borderRadius: 3, marginHorizontal: 10 } },
+        React.createElement(View, { style: { height: 6, borderRadius: 3, backgroundColor: color, width: `${dim.percentage}%` } }),
       ),
+      React.createElement(Text, { style: { color, fontFamily: 'Helvetica-Bold', fontSize: 10, minWidth: 40, textAlign: 'right' } }, `${dim.score}/${dim.maxScore}`),
+    ),
+    // Sub-scores
+    ...dim.subScores.map((sub: SubScore) => SubRow({ sub })),
+  );
+}
+
+function SubRow({ sub }: { sub: SubScore }) {
+  if (sub.notApplicable) {
+    return React.createElement(View, { key: sub.key, style: { ...s.row, paddingLeft: 10, paddingBottom: 3 } },
+      React.createElement(Text, { style: { flex: 1, fontSize: 9, color: GRAY } }, sub.label),
+      React.createElement(Text, { style: { fontSize: 8, color: GRAY, fontStyle: 'italic' } }, `N/v.t. — ${sub.naReason ?? ''}`),
+    );
+  }
+  const pct = sub.maxScore > 0 ? Math.round((sub.score / sub.maxScore) * 100) : 0;
+  const color = pct >= 70 ? GREEN : pct >= 40 ? ORANGE : RED;
+  return React.createElement(View, { key: sub.key, style: { ...s.row, paddingLeft: 10, paddingBottom: 3 } },
+    React.createElement(Text, { style: { width: 130, fontSize: 9, color: '#374151' } }, sub.label),
+    React.createElement(View, { style: { flex: 1, height: 4, backgroundColor: '#E5E7EB', borderRadius: 2, marginHorizontal: 6 } },
+      React.createElement(View, { style: { height: 4, borderRadius: 2, backgroundColor: color, width: `${pct}%` } }),
+    ),
+    React.createElement(Text, { style: { color, fontSize: 9, fontFamily: 'Helvetica-Bold', width: 36, textAlign: 'right' } }, `${sub.score}/${sub.maxScore}`),
+    // Issues (first only)
+    sub.issues.length > 0
+      ? React.createElement(Text, { style: { fontSize: 8, color: RED, flex: 2, marginLeft: 8 } }, `✗ ${sub.issues[0]}`)
+      : sub.strengths.length > 0
+      ? React.createElement(Text, { style: { fontSize: 8, color: GREEN, flex: 2, marginLeft: 8 } }, `✓ ${sub.strengths[0]}`)
+      : null,
+  );
+}
+
+function PageScorekaart({ scan }: { scan: ScanRecord }) {
+  const dims = Object.values(scan.scores!);
+  return React.createElement(Page, { size: 'A4', style: s.page },
+    React.createElement(View, { style: s.header },
+      React.createElement(Text, { style: s.headerTitle }, 'RFLCT · Scorekaart'),
+    ),
+    React.createElement(View, { style: { ...s.section, marginTop: 16 } },
+      React.createElement(Text, { style: s.sectionTitle }, 'Blok 3 — Scorekaart per dimensie'),
+      ...dims.map((dim) => DimRow({ dim })),
     ),
 
-    // PAGE 3 — Work points & recommendation
-    React.createElement(Page, { size: 'A4', style: styles.page },
-      React.createElement(View, { style: styles.header },
-        React.createElement(Text, { style: styles.headerTitle }, 'RFLCT · Werkpunten & Advies'),
-      ),
-
-      workPoints.length > 0
-        ? React.createElement(View, { style: styles.section },
-          React.createElement(Text, { style: styles.sectionTitle }, 'Prioritaire werkpunten'),
-          ...workPoints.map((pt, i) =>
-            React.createElement(View, { key: i, style: styles.workpointItem },
-              React.createElement(Text, { style: styles.bullet }, '•'),
-              React.createElement(Text, { style: styles.workpointText }, pt),
+    // Werkpunten
+    scan.workPoints && scan.workPoints.length > 0
+      ? React.createElement(View, { style: s.section },
+          React.createElement(Text, { style: s.sectionTitle }, 'Prioritaire werkpunten'),
+          ...scan.workPoints.map((pt, i) =>
+            React.createElement(View, { key: i, style: { ...s.row, paddingBottom: 4 } },
+              React.createElement(Text, { style: { color: GOLD, fontFamily: 'Helvetica-Bold', fontSize: 11, width: 12 } }, '→'),
+              React.createElement(Text, { style: { flex: 1, fontSize: 10, lineHeight: 1.4 } }, pt),
             ),
           ),
         )
-        : React.createElement(View, { style: styles.section },
-          React.createElement(Text, null, 'Geen kritieke werkpunten gevonden — uw advertentie scoort uitstekend!'),
-        ),
+      : null,
 
-      React.createElement(View, { style: { ...styles.section, marginTop: 24 } },
-        React.createElement(Text, { style: styles.sectionTitle }, 'Aanbeveling'),
-        React.createElement(View, { style: { backgroundColor: NAVY, borderRadius: 8, padding: '16 20' } },
-          React.createElement(Text, { style: { color: GOLD, fontFamily: 'Helvetica-Bold', fontSize: 13, marginBottom: 8 } }, recLabels[rec]),
-          React.createElement(Text, { style: { color: '#D1D5DB', fontSize: 10, lineHeight: 1.6 } },
-            rec === 'PRODUCTIE'
-              ? 'Uw advertentie mist essentiële elementen (grondplan, professionele foto\'s, conforme tekst). Een volledige productieopdracht biedt de sterkste resultaatverbetering.'
-              : rec === 'BASIS'
-              ? 'Met een Basis Pakket verbeteren we uw foto\'s en tekst snel en gericht, zonder grote investering.'
-              : rec === 'ONLINE'
-              ? 'Met het Online Pakket boosten we uw zichtbaarheid via gerichte publicatie-aanpak en sociale media — ideaal om meer kopers te bereiken.'
-              : rec === 'MICRO'
-              ? 'Gerichte micro-diensten lossen de specifieke zwakke punten op en tillen uw advertentie naar een hoger niveau.'
-              : 'Uw advertentie is van uitstekende kwaliteit. Het Online Pakket kan uw bereik nog verder vergroten.',
+    Footer({ email: scan.email }),
+  );
+}
+
+// ─── Blok 4: Kernbevindingen ─────────────────────────────────────────────────
+
+function KbCard({ kb, i }: { kb: KernBevinding; i: number }) {
+  return React.createElement(View, { style: { ...s.card, borderLeft: `3 solid ${GOLD}`, marginBottom: 10 } },
+    React.createElement(Text, { style: { fontSize: 8, color: GOLD, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 } }, `Bevinding ${i + 1}`),
+    React.createElement(Text, { style: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: NAVY, marginBottom: 8 } }, kb.wat),
+    React.createElement(Text, { style: { fontSize: 8, color: GRAY, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 } }, 'Impact'),
+    React.createElement(Text, { style: { fontSize: 9, color: '#374151', lineHeight: 1.5, marginBottom: 6 } }, kb.impact),
+    React.createElement(Text, { style: { fontSize: 8, color: GRAY, fontFamily: 'Helvetica-Bold', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 3 } }, 'Strategische lezing'),
+    React.createElement(Text, { style: { fontSize: 9, color: '#374151', lineHeight: 1.5 } }, kb.strategischeLezing),
+  );
+}
+
+function PageKernbevindingen({ scan }: { scan: ScanRecord }) {
+  const kbs = scan.kernbevindingen ?? [];
+  return React.createElement(Page, { size: 'A4', style: s.page },
+    React.createElement(View, { style: s.header },
+      React.createElement(Text, { style: s.headerTitle }, 'RFLCT · Kernbevindingen'),
+    ),
+    React.createElement(View, { style: { ...s.section, marginTop: 16 } },
+      React.createElement(Text, { style: s.sectionTitle }, 'Blok 4 — Kernbevindingen'),
+      ...(kbs.length > 0
+        ? kbs.map((kb, i) => KbCard({ kb, i }))
+        : [React.createElement(Text, { style: { fontSize: 10, color: GRAY } }, 'Geen kritieke bevindingen — uw advertentie scoort uitstekend.')]),
+    ),
+
+    // Blok 5 — Wettelijk detail (compliance)
+    React.createElement(View, { style: s.section },
+      React.createElement(Text, { style: s.sectionTitle }, 'Blok 5 — Wettelijk verplichte vermeldingen (detail)'),
+      ...scan.scores!.dim4.subScores.map((sub: SubScore) => {
+        const pct = sub.notApplicable ? 100 : sub.maxScore > 0 ? Math.round((sub.score / sub.maxScore) * 100) : 0;
+        const statusColor = sub.notApplicable ? GRAY : pct === 100 ? GREEN : pct > 0 ? ORANGE : RED;
+        const statusText  = sub.notApplicable ? 'N/v.t.' : pct === 100 ? 'Voldoet' : pct > 0 ? 'Gedeeltelijk' : 'Ontbreekt';
+        return React.createElement(View, { key: sub.key, style: { ...s.row, marginBottom: 5 } },
+          React.createElement(Text, { style: { flex: 1, fontSize: 9 } }, sub.label),
+          React.createElement(View, { style: { backgroundColor: sub.notApplicable ? '#F3F4F6' : pct === 100 ? '#DCFCE7' : pct > 0 ? '#FEF3C7' : '#FEE2E2', borderRadius: 3, paddingHorizontal: 6, paddingVertical: 2 } },
+            React.createElement(Text, { style: { fontSize: 8, color: statusColor, fontFamily: 'Helvetica-Bold' } }, statusText),
           ),
-        ),
-      ),
+          sub.naReason
+            ? React.createElement(Text, { style: { fontSize: 8, color: GRAY, flex: 2, marginLeft: 8, fontStyle: 'italic' } }, sub.naReason)
+            : sub.issues.length > 0
+            ? React.createElement(Text, { style: { fontSize: 8, color: RED, flex: 2, marginLeft: 8 } }, sub.issues[0])
+            : null,
+        );
+      }),
+    ),
 
-      React.createElement(View, { style: { ...styles.section, marginTop: 16 } },
-        React.createElement(Text, { style: { fontSize: 10, color: GRAY, lineHeight: 1.6 } },
-          'Voor vragen of om een afspraak te maken: info@rflct.be · www.rflct.be',
-        ),
-      ),
+    Footer({ email: scan.email }),
+  );
+}
 
-      React.createElement(View, { style: styles.footer, fixed: true },
-        React.createElement(Text, { style: styles.footerText }, 'RFLCT · www.rflct.be · info@rflct.be'),
-        React.createElement(Text, { style: styles.footerText }, `Vertrouwelijk · ${scan.email}`),
+// ─── Blok 6+7: Aanbeveling + Contact ─────────────────────────────────────────
+
+function PageAanbeveling({ scan }: { scan: ScanRecord }) {
+  const rec  = scan.recommendation ?? 'ONLINE';
+  const pkg  = PACKAGES.find((p) => p.id === rec.toLowerCase());
+  const micros = (scan.recommendedMicros ?? [])
+    .map((id) => MICRO_SERVICES.find((m) => m.id === id))
+    .filter((m): m is NonNullable<typeof m> => m !== undefined);
+
+  return React.createElement(Page, { size: 'A4', style: s.page },
+    React.createElement(View, { style: s.header },
+      React.createElement(Text, { style: s.headerTitle }, 'RFLCT · Aanbeveling & Diensten'),
+    ),
+
+    // Blok 6 — Aanbeveling
+    React.createElement(View, { style: { ...s.section, marginTop: 16 } },
+      React.createElement(Text, { style: s.sectionTitle }, 'Blok 6 — Aanbeveling'),
+
+      // Package card (als van toepassing)
+      pkg
+        ? React.createElement(View, { style: { backgroundColor: NAVY, borderRadius: 8, padding: '14 18', marginBottom: 10 } },
+            React.createElement(View, { style: { ...s.row, marginBottom: 6 } },
+              React.createElement(Text, { style: { color: GOLD, fontFamily: 'Helvetica-Bold', fontSize: 13, flex: 1 } }, pkg.name),
+              React.createElement(Text, { style: { color: GOLD, fontFamily: 'Helvetica-Bold', fontSize: 13 } }, `€${pkg.price.toLocaleString('nl-BE')}`),
+            ),
+            React.createElement(Text, { style: { color: '#D1D5DB', fontSize: 9, lineHeight: 1.5, marginBottom: 8 } }, pkg.kernpositionering),
+            React.createElement(View, { style: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 } },
+              ...pkg.tags.map((t) =>
+                React.createElement(View, { key: t, style: { backgroundColor: '#1E3A5F', borderRadius: 3, paddingHorizontal: 6, paddingVertical: 2 } },
+                  React.createElement(Text, { style: { color: '#93C5FD', fontSize: 8 } }, t),
+                ),
+              ),
+            ),
+          )
+        : null,
+
+      // MICRO: aanbevolen micro-diensten
+      micros.length > 0
+        ? React.createElement(View, { style: { marginTop: pkg ? 8 : 0 } },
+            React.createElement(Text, { style: { fontSize: 9, color: GRAY, fontFamily: 'Helvetica-Bold', marginBottom: 6 } }, 'Aanbevolen micro-diensten op basis van uw scan:'),
+            ...micros.map((m) =>
+              React.createElement(View, { key: m.id, style: { ...s.row, ...s.card, marginBottom: 4 } },
+                React.createElement(Text, { style: { flex: 1, fontSize: 10, fontFamily: 'Helvetica-Bold' } }, m.name),
+                React.createElement(Text, { style: { color: GOLD, fontFamily: 'Helvetica-Bold', fontSize: 10 } }, `€${m.price.toLocaleString('nl-BE')}`),
+              ),
+            ),
+          )
+        : null,
+
+      // Toelichting
+      scan.recommendationWhy
+        ? React.createElement(View, { style: { ...s.card, marginTop: 8 } },
+            React.createElement(Text, { style: { fontSize: 9, color: '#374151', lineHeight: 1.5 } }, scan.recommendationWhy),
+          )
+        : null,
+    ),
+
+    // Blok 7 — Contact & afsluiting
+    React.createElement(View, { style: { ...s.section, marginTop: 10 } },
+      React.createElement(Text, { style: s.sectionTitle }, 'Blok 7 — Volgende stap'),
+      React.createElement(View, { style: { backgroundColor: LIGHT, borderRadius: 8, padding: '14 18' } },
+        React.createElement(Text, { style: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: NAVY, marginBottom: 8 } }, 'Uw vastgoedcoach staat klaar.'),
+        React.createElement(Text, { style: { fontSize: 9, color: '#374151', lineHeight: 1.6, marginBottom: 10 } },
+          'Dit rapport is een eerste diagnose van uw Immoweb-advertentie. Een RFLCT-vastgoedcoach bespreekt de bevindingen met u en stelt een aanpak op maat voor — zonder verbintenis.',
+        ),
+        React.createElement(View, { style: s.row },
+          React.createElement(Text, { style: { fontSize: 9, color: NAVY, fontFamily: 'Helvetica-Bold', width: 60 } }, 'E-mail'),
+          React.createElement(Text, { style: { fontSize: 9, color: '#374151' } }, 'info@rflct.be'),
+        ),
+        React.createElement(View, { style: { ...s.row, marginTop: 4 } },
+          React.createElement(Text, { style: { fontSize: 9, color: NAVY, fontFamily: 'Helvetica-Bold', width: 60 } }, 'Website'),
+          React.createElement(Text, { style: { fontSize: 9, color: '#374151' } }, 'www.rflct.be'),
+        ),
+        React.createElement(View, { style: { ...s.row, marginTop: 4 } },
+          React.createElement(Text, { style: { fontSize: 9, color: NAVY, fontFamily: 'Helvetica-Bold', width: 60 } }, 'Rapport voor'),
+          React.createElement(Text, { style: { fontSize: 9, color: '#374151' } }, scan.email),
+        ),
       ),
     ),
+
+    Footer({ email: scan.email }),
+  );
+}
+
+// ─── Root document ────────────────────────────────────────────────────────────
+
+function RflctDocument({ scan }: { scan: ScanRecord }) {
+  return React.createElement(
+    Document,
+    { title: `RFLCT Advertentie-scan — ${scan.listing?.title ?? scan.url}` },
+    React.createElement(PageCover, { scan }),
+    React.createElement(PageScorekaart, { scan }),
+    React.createElement(PageKernbevindingen, { scan }),
+    React.createElement(PageAanbeveling, { scan }),
   );
 }
 
