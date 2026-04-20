@@ -165,8 +165,10 @@ function parseJsonApi(raw: any, url: string, id: string): ImmowebListing {
     flooding?.floodingNorm      !== undefined ||
     flooding?.partialFloodingInsuranceRequired !== undefined ||
     property?.floodZoneType     !== undefined;
-  // "niet gespecificeerd" when flood fields exist but floodZoneType is null
-  const floodRiskUnspecifiedApi = hasFloodRiskStructured && (flooding?.floodZoneType === null);
+  // Count how many of P-score / G-score are null ("niet gespecificeerd")
+  const pNull = hasFloodRiskStructured && (flooding?.floodZoneTypeCurrentRisk  === null || flooding?.floodZoneType === null);
+  const gNull = hasFloodRiskStructured && (flooding?.floodZoneTypePotentialRisk === null || flooding?.floodZoneType === null);
+  const floodUnspecifiedCountApi = (pNull ? 1 : 0) + (gNull ? 1 : 0);
   return {
     id: String(raw?.id ?? id),
     url,
@@ -194,7 +196,7 @@ function parseJsonApi(raw: any, url: string, id: string): ImmowebListing {
       hasAsbestosInfo: /asbest|asbestattest|amiante/.test(dl),
       hasEpcLabel: !!epcLabel,
       hasFloodRisk: hasFloodRiskStructured || /overstromingsgevoeligheid|watertoets|risque d.inondation|p-score|g-score/.test(dl),
-      floodRiskUnspecified: floodRiskUnspecifiedApi,
+      floodUnspecifiedCount: floodUnspecifiedCountApi,
     },
   };
 }
@@ -283,10 +285,12 @@ function parseHtmlFallback(html: string, url: string, id: string): ImmowebListin
         || /"floodingNorm"\s*:/.test(searchable)
         || /"partialFloodingInsuranceRequired"\s*:/.test(searchable)
         || /overstromingsgevoeligheid|watertoets|p-score|g-score/.test(dl),
-      // "niet gespecificeerd": floodZoneType is null, or explicit text in page
-      floodRiskUnspecified: /"floodZoneType"\s*:\s*null/.test(searchable)
-        || /(?:p-score|g-score)[^.\n]{0,60}niet\s+gespecificeerd/i.test(html)
-        || /niet\s+gespecificeerd[^.\n]{0,60}(?:p-score|g-score)/i.test(html),
+      // Count P-score and G-score "niet gespecificeerd" individually
+      floodUnspecifiedCount: (
+        (/"floodZoneTypeCurrentRisk"\s*:\s*null/.test(searchable) || /p-score[^.\n]{0,80}niet\s+gespecificeerd/i.test(html) || /niet\s+gespecificeerd[^.\n]{0,80}p-score/i.test(html)) ? 1 : 0
+      ) + (
+        (/"floodZoneTypePotentialRisk"\s*:\s*null/.test(searchable) || /g-score[^.\n]{0,80}niet\s+gespecificeerd/i.test(html) || /niet\s+gespecificeerd[^.\n]{0,80}g-score/i.test(html)) ? 1 : 0
+      ),
     },
   };
 }

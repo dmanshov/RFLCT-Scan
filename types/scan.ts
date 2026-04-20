@@ -32,7 +32,7 @@ export interface ImmowebListing {
     hasAsbestosInfo: boolean;
     hasEpcLabel: boolean;
     hasFloodRisk: boolean;
-    floodRiskUnspecified: boolean; // true when P/G-score field present but value is "niet gespecificeerd"
+    floodUnspecifiedCount: number; // 0 = both specified, 1 = one niet gespecificeerd, 2 = both niet gespecificeerd
   };
 }
 

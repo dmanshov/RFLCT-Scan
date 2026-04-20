@@ -197,14 +197,16 @@ function scoreDim4(listing: ImmowebListing): DimensionScore {
   );
 
   // Sub 4.4 — Overstromingsrisico (max 3)
-  // Partial score when flood risk field present but P/G-score is "niet gespecificeerd"
-  const { hasFloodRisk, floodRiskUnspecified } = listing.compliance;
-  const floodScore = !hasFloodRisk ? 0 : floodRiskUnspecified ? 1 : 3;
+  // 0 = niet vermeld of beide niet gespecificeerd, 1 = één niet gespecificeerd, 3 = beide correct
+  const { hasFloodRisk, floodUnspecifiedCount } = listing.compliance;
+  const floodScore = !hasFloodRisk || floodUnspecifiedCount === 2 ? 0 : floodUnspecifiedCount === 1 ? 1 : 3;
   const s44 = sub('overstromingsrisico', 'Overstromingsrisico (P- & G-score)', floodScore, 3,
     !hasFloodRisk
       ? ['Overstromingsgevoeligheid (P- en G-score) niet vermeld — wettelijk verplicht in Vlaanderen.']
-      : floodRiskUnspecified
-      ? ['P- en/of G-score staat op "niet gespecificeerd" — vraag de correcte waarden op bij gemeente of notaris.']
+      : floodUnspecifiedCount === 2
+      ? ['P-score én G-score staan op "niet gespecificeerd" — vraag de correcte waarden op bij gemeente of notaris.']
+      : floodUnspecifiedCount === 1
+      ? ['Één van P-score of G-score staat op "niet gespecificeerd" — vraag de ontbrekende waarde op.']
       : [],
     floodScore === 3 ? ['Overstromingsrisico correct vermeld.'] : [],
   );
