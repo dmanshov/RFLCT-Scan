@@ -170,15 +170,20 @@ export async function analyzePhotos(photoUrls: string[]): Promise<PhotoAnalysisR
             text: `Je bent expert vastgoedfotograaf. Je analyseert de EERSTE ${imageBlocks.length} foto's (van ${photoUrls.length} totaal) van een Immoweb-advertentie, IN VOLGORDE (foto 1 = eerste in de advertentie).
 
 STAP 0 — Grondplan-detectie:
-Bekijk alle ${imageBlocks.length} foto's. Een grondplan is UITSLUITEND een technische bovenaanzicht-tekening met kameraanduidingen (bijv. "woonkamer", "slaapkamer") of meetlijnen in meters — zoals een architect of landmeter opmaakt. Geef de 0-gebaseerde indices terug van foto's die hieraan voldoen.
+Bekijk alle ${imageBlocks.length} foto's. Identificeer foto's die een grondplan of plattegrond zijn: een bovenaanzicht van de ruimte-indeling van een woning. Geef de 0-gebaseerde indices terug.
+
+TELT WEL als grondplan:
+- Technische tekening met kameraanduidingen of meetlijnen
+- Handgetekende schets of eenvoudige lijntekening die de indeling van een verdieping toont
+- Schematische plattegrond (ook zonder maataanduidingen, als het duidelijk een bovenaanzicht is)
 
 TELT NIET als grondplan (→ niet opnemen):
-- Artistieke schetsen of aquarellen van een woning (zelfs al lijken ze op een plattegrond)
-- Exterieur-illustraties, 3D-renders of artist impressions
-- Foto's van een tuinontwerp of terrasschets
-- Decoratieve tekeningen zonder maatlijnen of ruimtelabels
-- Gewone interieur- of exterieurbeelden
-Bij twijfel: NIET opnemen. Geen grondplannen → lege array.
+- Gewone interieur- of exterieurbeelden (realistische foto's van kamers of buitenkant)
+- Exterieur-renders, 3D-visualisaties of artist impressions van de woning van buiten
+- Tuinontwerp of landschapsplan zonder woningindeling
+- Decoratieve illustraties of aquarellen zonder plattegrondperspectief
+
+Bij twijfel: opnemen als het duidelijk een bovenaanzicht van de woning is. Geen grondplannen → lege array.
 
 STAP 1 — Ruimte-identificatie (intern, verschijnt NIET in JSON):
 Noteer voor elke foto het type ruimte/element: exterieur/gevel, tuin/terras, hal/inkomhal, living/woonkamer, keuken, eetkamer, slaapkamer, badkamer, bureau, bergruimte/kelder, garage, of detail/overig.

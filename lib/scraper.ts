@@ -98,25 +98,41 @@ function extractPhotosOrdered(html: string): { photos: string[]; floorPlans: str
 
   const IMMOWEB_URL_RE = /https:\/\/(?:media-resize\.immowebstatic\.be|picture\.immoweb\.be)\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp)/gi;
   const FLOOR_PLAN_RE  = /FLOOR_PLAN|floor[_\-]?plan|grondplan/i;
+  const FLOOR_PLAN_VAL_RE = /grondplan|plattegrond|floor[_\-]?plan/i;
 
-  // Pass 1: largeUrl fields — classify by explicit type/category field within the
-  // same JSON object (±150 chars). Avoids false positives from "grondplan" appearing
-  // in feature lists, tags, or description text that happens to be near a photo URL.
+  // Pass 1: largeUrl fields — two signals within ±250 chars (same JSON object):
+  //   Signal A: explicit type/category field matches FLOOR_PLAN_RE
+  //   Signal B: any string field VALUE mentions grondplan/plattegrond/floor-plan
+  //             (catches alt, title, caption fields set by Immoweb)
   const largeUrlRe = /"largeUrl"\s*:\s*"(https:\/\/(?:media-resize\.immowebstatic\.be|picture\.immoweb\.be)[^"]+)"/g;
   let m: RegExpExecArray | null;
   while ((m = largeUrlRe.exec(searchable)) !== null) {
     const url = m[1];
     if (seen.has(url)) continue;
     seen.add(url);
-    const objCtx = searchable.slice(Math.max(0, m.index - 150), m.index + 150);
+
+    const objCtx = searchable.slice(Math.max(0, m.index - 250), m.index + 250);
+
+    // Signal A: type/category field
     const typeMatch = objCtx.match(/"(?:type|category|mediaType|subType|pictureType)"\s*:\s*"([^"]*)"/);
-    const isFloorPlan = typeMatch !== null && FLOOR_PLAN_RE.test(typeMatch[1]);
+    let isFloorPlan = typeMatch !== null && FLOOR_PLAN_RE.test(typeMatch[1]);
+
+    // Signal B: any field value within the object contains floor plan keywords
+    if (!isFloorPlan) {
+      const valRe = /"[^"]{1,40}"\s*:\s*"([^"]{2,200})"/g;
+      let v: RegExpExecArray | null;
+      while ((v = valRe.exec(objCtx)) !== null) {
+        if (FLOOR_PLAN_VAL_RE.test(v[1])) { isFloorPlan = true; break; }
+      }
+    }
+
     (isFloorPlan ? floorPlans : photos).push(url);
   }
 
-  // Pass 2: look for "FLOOR_PLAN" as a quoted JSON value only — avoids matching
-  // "grondplan" in Dutch prose text which would cause false positives
-  const fpValueRe = /"(?:FLOOR_PLAN|floor[_\-]?plan)"/gi;
+  // Pass 2: sweep for floor plan type values as quoted JSON strings.
+  // Includes "grondplan"/"plattegrond" as standalone values (safe: these only appear
+  // as complete field values in metadata, not inside longer description strings).
+  const fpValueRe = /"(?:FLOOR_PLAN|floor[_\-]?plan|grondplan|plattegrond)"/gi;
   let fp: RegExpExecArray | null;
   while ((fp = fpValueRe.exec(searchable)) !== null) {
     const ctx = searchable.slice(Math.max(0, fp.index - 800), fp.index + 800);
