@@ -343,15 +343,30 @@ export async function scrapeImmowebListing(url: string): Promise<ImmowebListing>
 
   if (!SCRAPER_KEY) throw new Error('SCRAPER_API_KEY is niet geconfigureerd in de omgevingsvariabelen.');
 
-  const res = await axios.get('https://api.scraperapi.com/', {
-    params: { api_key: SCRAPER_KEY, url: url.split('?')[0], render: 'false' },
-    timeout: 90_000,
-    responseType: 'arraybuffer',
-  });
-
-  const html = Buffer.from(res.data as ArrayBuffer).toString('utf8');
-  if (html.length < 1000) throw new Error(`Pagina kon niet worden opgehaald (${html.length} bytes).`);
-
-  console.info(`[scraper] HTML fetched: ${html.length} bytes, ${extractPhotos(html).length} photos found`);
-  return parseHtmlFallback(html, url, id);
+  // Retry up to 3 times on 5xx errors from ScraperAPI (transient server errors)
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await axios.get('https://api.scraperapi.com/', {
+        params: { api_key: SCRAPER_KEY, url: url.split('?')[0], render: 'false' },
+        timeout: 90_000,
+        responseType: 'arraybuffer',
+      });
+      const html = Buffer.from(res.data as ArrayBuffer).toString('utf8');
+      if (html.length < 1000) throw new Error(`Pagina kon niet worden opgehaald (${html.length} bytes).`);
+      console.info(`[scraper] HTML fetched: ${html.length} bytes, ${extractPhotos(html).length} photos found`);
+      return parseHtmlFallback(html, url, id);
+    } catch (err: unknown) {
+      const status = (err as { response?: { status?: number } })?.response?.status ?? 0;
+      if (status >= 500 && attempt < 3) {
+        const delay = attempt * 3000;
+        console.warn(`[scraper] ScraperAPI ${status} — retry ${attempt}/3 in ${delay}ms`);
+        await new Promise((r) => setTimeout(r, delay));
+        lastError = err;
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastError;
 }
